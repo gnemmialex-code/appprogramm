@@ -28,7 +28,10 @@ class PhoneFrame extends StatelessWidget {
     final media = MediaQuery.of(context);
 
     // Real phone-sized window → render the app full screen, no frame.
-    final showFrame = media.size.width > 520 && media.size.height > 640;
+    // A portrait phone is at most ~430 logical px wide, so width alone tells a
+    // real device apart from a web/desktop preview. The frame is scaled by the
+    // FittedBox below, so it still fits on shorter windows.
+    final showFrame = media.size.width > 500;
     if (!showFrame) return child;
 
     const deviceW = screenW + bezel * 2;
