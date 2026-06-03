@@ -9,34 +9,65 @@ import 'package:lumina/state/app_providers.dart';
 
 void main() {
   Program program() => Program.fromJson(
-      jsonDecode(generateContent('Sommeil', 1)) as Map<String, dynamic>);
+    jsonDecode(generateContent('Sommeil', 1)) as Map<String, dynamic>,
+  );
+
+  // The full text pool a retention question may be drawn from (option order
+  // may be scrambled, but the question text is preserved).
+  Set<String> poolOf(Program p) => {
+    for (final m in p.modules) ...m.quiz.map((q) => q.question),
+    for (final part in p.parts) ...part.quiz.map((q) => q.question),
+    ...p.quiz.map((q) => q.question),
+    ...p.detailQuiz.map((q) => q.question),
+  };
 
   group('buildRetentionQuiz', () {
-    test('returns the requested number of questions from the program', () {
+    test('every question comes from the program pool', () {
       final p = program();
-      final quiz = buildRetentionQuiz(p, count: 8, rng: Random(42));
-
-      expect(quiz.length, 8);
-
-      // Every question must come from the program's combined pool.
-      final pool = <String>{
-        for (final m in p.modules) ...m.quiz.map((q) => q.question),
-        for (final part in p.parts) ...part.quiz.map((q) => q.question),
-        ...p.quiz.map((q) => q.question),
-      };
+      final quiz = buildRetentionQuiz(p, completedModules: 6, rng: Random(42));
+      final pool = poolOf(p);
       for (final q in quiz) {
         expect(pool, contains(q.question));
       }
     });
 
+    test('asks more questions the further the learner has progressed', () {
+      final p = program();
+      final early = buildRetentionQuiz(p, completedModules: 0, rng: Random(7));
+      final late = buildRetentionQuiz(p, completedModules: 12, rng: Random(7));
+      expect(early.length, 6);
+      expect(late.length, greaterThan(early.length));
+    });
+
+    test('questions get harder as progress increases', () {
+      final p = program();
+      double avgDiff(List<QuizQuestion> qs) =>
+          qs.map((q) => q.difficulty).fold(0, (a, b) => a + b) / qs.length;
+
+      final early = buildRetentionQuiz(p, completedModules: 0, rng: Random(3));
+      final late = buildRetentionQuiz(
+        p,
+        completedModules: 12,
+        checksDone: 4,
+        rng: Random(3),
+      );
+      expect(avgDiff(late), greaterThan(avgDiff(early)));
+      // Advanced sessions surface difficulty-3 "detail" questions.
+      expect(late.any((q) => q.difficulty == 3), isTrue);
+    });
+
     test('different seeds produce different selections', () {
       final p = program();
-      final a = buildRetentionQuiz(p, count: 6, rng: Random(1))
-          .map((q) => q.question)
-          .toList();
-      final b = buildRetentionQuiz(p, count: 6, rng: Random(2))
-          .map((q) => q.question)
-          .toList();
+      final a = buildRetentionQuiz(
+        p,
+        completedModules: 6,
+        rng: Random(1),
+      ).map((q) => q.question).toList();
+      final b = buildRetentionQuiz(
+        p,
+        completedModules: 6,
+        rng: Random(2),
+      ).map((q) => q.question).toList();
       expect(a, isNot(equals(b)));
     });
 
@@ -74,8 +105,10 @@ void main() {
 
       // Already announced for this due event → should not re-announce.
       expect(
-        RetentionState(nextDueMillis: past, announcedDueMillis: past)
-            .shouldAnnounce,
+        RetentionState(
+          nextDueMillis: past,
+          announcedDueMillis: past,
+        ).shouldAnnounce,
         isFalse,
       );
       expect(RetentionState(nextDueMillis: past).shouldAnnounce, isTrue);

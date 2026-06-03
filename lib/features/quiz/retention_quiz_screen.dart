@@ -22,17 +22,27 @@ class RetentionQuizScreen extends ConsumerStatefulWidget {
 
 class _RetentionQuizScreenState extends ConsumerState<RetentionQuizScreen> {
   late final List<QuizQuestion> _questions;
+  double _stage = 0;
 
   @override
   void initState() {
     super.initState();
     final program = ref.read(programControllerProvider);
     final progress = ref.read(progressControllerProvider);
+    final retention = ref.read(retentionControllerProvider);
+    if (program != null) {
+      _stage = retentionStage(
+        program,
+        progress.completedModules.length,
+        retention.checks,
+      );
+    }
     _questions = program == null
         ? const []
         : buildRetentionQuiz(
             program,
-            count: 8,
+            completedModules: progress.completedModules.length,
+            checksDone: retention.checks,
             // Insist on the subjects the user struggled with.
             focusModuleIds: strugglingModuleIds(program, progress).toSet(),
           );
@@ -68,14 +78,48 @@ class _RetentionQuizScreenState extends ConsumerState<RetentionQuizScreen> {
                 color: AppColors.sun.withValues(alpha: 0.20),
                 child: Row(
                   children: [
-                    const Icon(Icons.psychology_alt_rounded,
-                        color: AppColors.ink),
+                    Icon(Icons.psychology_alt_rounded, color: AppColors.ink),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: Text(
-                        'Petit point mémoire sur « ${program.domain} ». '
-                        'Des questions tirées au hasard dans tout ton programme.',
-                        style: const TextStyle(fontSize: 13, height: 1.35),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  'Point mémoire sur « ${program.domain} »',
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 9,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppColors.ink.withValues(alpha: 0.08),
+                                  borderRadius: BorderRadius.circular(9),
+                                ),
+                                child: Text(
+                                  'Niveau : ${retentionLevelLabel(_stage)}',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            retentionLevelBlurb(_stage),
+                            style: const TextStyle(fontSize: 13, height: 1.35),
+                          ),
+                        ],
                       ),
                     ),
                   ],
@@ -112,7 +156,11 @@ class _RetentionQuizScreenState extends ConsumerState<RetentionQuizScreen> {
         title: const Text('Point mémoire terminé 🧠'),
         content: Text(
           'Ton score : $score / $total\n\n'
-          '${ratio >= 0.8 ? 'Excellente mémoire, c\'est bien ancré !' : ratio >= 0.5 ? 'Pas mal ! Revois les chapitres concernés.' : 'À retravailler : reprends les chapitres pour consolider.'}'
+          '${ratio >= 0.8
+              ? 'Excellente mémoire, c\'est bien ancré !'
+              : ratio >= 0.5
+              ? 'Pas mal ! Revois les chapitres concernés.'
+              : 'À retravailler : reprends les chapitres pour consolider.'}'
           '\n\nProchain point mémoire programmé automatiquement.',
           style: const TextStyle(height: 1.4),
         ),

@@ -63,8 +63,10 @@ class ProgressScreen extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 24),
-            const Text('Modules complétés',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+            const Text(
+              'Modules complétés',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+            ),
             const SizedBox(height: 12),
             if (program != null)
               ...List.generate(program.modules.length, (i) {
@@ -86,8 +88,7 @@ class ProgressScreen extends ConsumerWidget {
                           m.title,
                           style: TextStyle(
                             color: c ? AppColors.ink : AppColors.inkSoft,
-                            fontWeight:
-                                c ? FontWeight.w600 : FontWeight.w400,
+                            fontWeight: c ? FontWeight.w600 : FontWeight.w400,
                           ),
                         ),
                       ),
@@ -97,16 +98,22 @@ class ProgressScreen extends ConsumerWidget {
               }),
             if (program != null && progress.moduleTimes.isNotEmpty) ...[
               const SizedBox(height: 24),
-              const Text('Temps par chapitre',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+              const Text(
+                'Temps par chapitre',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+              ),
               const SizedBox(height: 4),
-              Text('Repère où tu as ralenti — c\'est là que ton parcours '
-                  's\'adapte.',
-                  style: TextStyle(fontSize: 13, color: AppColors.inkSoft)),
+              Text(
+                'Repère où tu as ralenti — c\'est là que ton parcours '
+                's\'adapte.',
+                style: TextStyle(fontSize: 13, color: AppColors.inkSoft),
+              ),
               const SizedBox(height: 12),
               ...() {
-                final struggling =
-                    strugglingModuleIds(program, progress).toSet();
+                final struggling = strugglingModuleIds(
+                  program,
+                  progress,
+                ).toSet();
                 final maxT = progress.moduleTimes.values.fold<int>(1, max);
                 return [
                   for (final m in program.modules)
@@ -124,12 +131,16 @@ class ProgressScreen extends ConsumerWidget {
               }(),
             ],
             const SizedBox(height: 16),
-            const Text('Badges',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+            const Text(
+              'Badges',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+            ),
             const SizedBox(height: 12),
             if (progress.badges.isEmpty)
-              Text('Aucun badge pour l\'instant. Continue ! 💪',
-                  style: TextStyle(color: AppColors.inkSoft))
+              Text(
+                'Aucun badge pour l\'instant. Continue ! 💪',
+                style: TextStyle(color: AppColors.inkSoft),
+              )
             else
               Wrap(
                 spacing: 10,
@@ -177,11 +188,15 @@ class _TimeRow extends StatelessWidget {
               Row(
                 children: [
                   Flexible(
-                    child: Text(subject,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                            fontSize: 14, fontWeight: FontWeight.w600)),
+                    child: Text(
+                      subject,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
                   if (slow) ...[
                     const SizedBox(width: 8),
@@ -201,16 +216,18 @@ class _TimeRow extends StatelessWidget {
                   minHeight: 8,
                   backgroundColor: AppColors.line,
                   valueColor: AlwaysStoppedAnimation(
-                      slow ? AppColors.peach : AppColors.brandStart),
+                    slow ? AppColors.peach : AppColors.brandStart,
+                  ),
                 ),
               ),
             ],
           ),
         ),
         const SizedBox(width: 12),
-        Text(_fmtTime(seconds),
-            style: const TextStyle(
-                fontWeight: FontWeight.w700, fontSize: 13)),
+        Text(
+          _fmtTime(seconds),
+          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+        ),
       ],
     );
   }
@@ -255,9 +272,13 @@ class _StatCircle extends StatelessWidget {
                     ),
                   ),
                 ),
-                Text(caption,
-                    style: const TextStyle(
-                        fontSize: 18, fontWeight: FontWeight.w800)),
+                Text(
+                  caption,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
               ],
             ),
           ),

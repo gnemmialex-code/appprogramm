@@ -25,6 +25,13 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
   final Set<String> _liked = {};
   final Set<String> _saved = {};
   bool _initialised = false;
+  final PageController _pageController = PageController();
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
 
   @override
   void didChangeDependencies() {
@@ -46,8 +53,13 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
     _interests = {match ?? kDomains.first.id};
   }
 
-  List<FeedCard> get _cards =>
-      _tab == 0 ? allFeed() : themedFeed(_interests);
+  List<FeedCard> get _cards => _tab == 0 ? allFeed() : themedFeed(_interests);
+
+  /// Jumps the (single, shared) controller back to the first card. Used when
+  /// the feed content changes so the user starts at the top of the new list.
+  void _resetToTop() {
+    if (_pageController.hasClients) _pageController.jumpToPage(0);
+  }
 
   void _switchTab(int t) {
     if (t == _tab) return;
@@ -55,6 +67,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
       _tab = t;
       _page = 0;
     });
+    _resetToTop();
   }
 
   void _toggleInterest(String id) {
@@ -66,6 +79,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
       }
       _page = 0;
     });
+    _resetToTop();
   }
 
   @override
@@ -80,24 +94,50 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
           // The vertical, snapping feed.
           Positioned.fill(
             child: PageView.builder(
-              key: ValueKey('$_tab-${_interests.join(",")}'),
+              controller: _pageController,
               scrollDirection: Axis.vertical,
               onPageChanged: (p) => setState(() => _page = p),
               itemCount: cards.length,
               itemBuilder: (context, i) {
                 final c = cards[i];
                 final key = '${c.domainId}|${c.title}';
-                return _FeedCardView(
+                final view = _FeedCardView(
                   card: c,
                   index: i,
                   total: cards.length,
                   liked: _liked.contains(key),
                   saved: _saved.contains(key),
                   showHint: i == 0 && _page == 0,
-                  onLike: () => setState(() =>
-                      _liked.contains(key) ? _liked.remove(key) : _liked.add(key)),
-                  onSave: () => setState(() =>
-                      _saved.contains(key) ? _saved.remove(key) : _saved.add(key)),
+                  onLike: () => setState(
+                    () => _liked.contains(key)
+                        ? _liked.remove(key)
+                        : _liked.add(key),
+                  ),
+                  onSave: () => setState(
+                    () => _saved.contains(key)
+                        ? _saved.remove(key)
+                        : _saved.add(key),
+                  ),
+                );
+                // Depth effect: the off-screen card shrinks & fades, then
+                // settles to full size as it snaps into place — synced to swipe.
+                return AnimatedBuilder(
+                  animation: _pageController,
+                  builder: (context, child) {
+                    var delta = 0.0;
+                    if (_pageController.hasClients &&
+                        _pageController.position.haveDimensions) {
+                      delta = (_pageController.page ?? _page.toDouble()) - i;
+                    }
+                    final t = delta.abs().clamp(0.0, 1.0);
+                    final scale = 1 - 0.06 * t;
+                    final opacity = 1 - 0.45 * t;
+                    return Opacity(
+                      opacity: opacity,
+                      child: Transform.scale(scale: scale, child: child),
+                    );
+                  },
+                  child: view,
                 );
               },
             ),
@@ -113,7 +153,10 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
                 Row(
                   children: [
                     IconButton(
-                      icon: const Icon(Icons.close_rounded, color: Colors.white),
+                      icon: const Icon(
+                        Icons.close_rounded,
+                        color: Colors.white,
+                      ),
                       onPressed: () => context.pop(),
                     ),
                     const Spacer(),
@@ -269,20 +312,29 @@ class _FeedCardView extends StatelessWidget {
           Positioned(
             right: -30,
             top: pad.top + 80,
-            child: Icon(card.icon,
-                size: 220, color: Colors.white.withValues(alpha: 0.08)),
+            child: Icon(
+              card.icon,
+              size: 220,
+              color: Colors.white.withValues(alpha: 0.08),
+            ),
           ),
           // Card text content.
           Padding(
             padding: EdgeInsets.fromLTRB(
-                24, pad.top + 120, 96, pad.bottom + 40),
+              24,
+              pad.top + 120,
+              96,
+              pad.bottom + 40,
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.22),
                     borderRadius: BorderRadius.circular(14),
@@ -292,11 +344,14 @@ class _FeedCardView extends StatelessWidget {
                     children: [
                       Icon(card.icon, size: 16, color: Colors.white),
                       const SizedBox(width: 6),
-                      Text(card.domainLabel,
-                          style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 12)),
+                      Text(
+                        card.domainLabel,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -323,13 +378,18 @@ class _FeedCardView extends StatelessWidget {
                 if (showHint)
                   Row(
                     children: [
-                      const Icon(Icons.keyboard_arrow_up_rounded,
-                          color: Colors.white70),
+                      const Icon(
+                        Icons.keyboard_arrow_up_rounded,
+                        color: Colors.white70,
+                      ),
                       const SizedBox(width: 4),
-                      Text('Glisse vers le haut',
-                          style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.8),
-                              fontSize: 13)),
+                      Text(
+                        'Glisse vers le haut',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.8),
+                          fontSize: 13,
+                        ),
+                      ),
                     ],
                   ),
               ],
@@ -357,11 +417,14 @@ class _FeedCardView extends StatelessWidget {
                   onTap: onSave,
                 ),
                 const SizedBox(height: 22),
-                Text('${index + 1}/$total',
-                    style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600)),
+                Text(
+                  '${index + 1}/$total',
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ],
             ),
           ),
@@ -375,7 +438,11 @@ class _Action extends StatelessWidget {
   final IconData icon;
   final bool active;
   final VoidCallback onTap;
-  const _Action({required this.icon, required this.active, required this.onTap});
+  const _Action({
+    required this.icon,
+    required this.active,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {

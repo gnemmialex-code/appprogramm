@@ -34,12 +34,18 @@ class PartQuizScreen extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(part.title,
-                  style: const TextStyle(
-                      fontSize: 22, fontWeight: FontWeight.w800)),
+              Text(
+                part.title,
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
               const SizedBox(height: 2),
-              Text('Quiz transversal du niveau • ${part.subtitle}',
-                  style: TextStyle(color: AppColors.inkSoft)),
+              Text(
+                'Quiz transversal du niveau • ${part.subtitle}',
+                style: TextStyle(color: AppColors.inkSoft),
+              ),
               const SizedBox(height: 14),
               Expanded(
                 child: QuizRunner(

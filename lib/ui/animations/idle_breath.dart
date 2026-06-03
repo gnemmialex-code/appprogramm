@@ -94,9 +94,10 @@ class AmbientBob extends StatefulWidget {
 
 class _AmbientBobState extends State<AmbientBob>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _c =
-      AnimationController(vsync: this, duration: widget.period)
-        ..repeat(reverse: true);
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: widget.period,
+  )..repeat(reverse: true);
 
   @override
   void dispose() {

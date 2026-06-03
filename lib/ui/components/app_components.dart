@@ -4,7 +4,9 @@ import '../theme/app_colors.dart';
 
 /// A soft, rounded surface card with a gentle shadow — the visual building
 /// block reused across the app.
-class SoftCard extends StatelessWidget {
+///
+/// When tappable it gently scales down on press for a tactile, responsive feel.
+class SoftCard extends StatefulWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;
   final VoidCallback? onTap;
@@ -21,23 +23,47 @@ class SoftCard extends StatelessWidget {
   });
 
   @override
+  State<SoftCard> createState() => _SoftCardState();
+}
+
+class _SoftCardState extends State<SoftCard> {
+  bool _pressed = false;
+
+  void _setPressed(bool v) {
+    if (widget.onTap == null || _pressed == v) return;
+    setState(() => _pressed = v);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Material(
+    final card = Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: onTap,
+        onTap: widget.onTap,
+        onHighlightChanged: _setPressed,
         borderRadius: BorderRadius.circular(24),
         child: Ink(
-          padding: padding,
+          padding: widget.padding,
           decoration: BoxDecoration(
-            color: gradient == null ? (color ?? AppColors.surface) : null,
-            gradient: gradient,
+            color: widget.gradient == null
+                ? (widget.color ?? AppColors.surface)
+                : null,
+            gradient: widget.gradient,
             borderRadius: BorderRadius.circular(24),
             boxShadow: AppColors.softShadow,
           ),
-          child: child,
+          child: widget.child,
         ),
       ),
+    );
+
+    if (widget.onTap == null) return card;
+
+    return AnimatedScale(
+      scale: _pressed ? 0.97 : 1.0,
+      duration: const Duration(milliseconds: 130),
+      curve: Curves.easeOut,
+      child: card,
     );
   }
 }
@@ -62,7 +88,9 @@ class GradientProgressBar extends StatelessWidget {
               curve: Curves.easeOutCubic,
               height: height,
               width: c.maxWidth * value.clamp(0, 1),
-              decoration: const BoxDecoration(gradient: AppColors.brandGradient),
+              decoration: const BoxDecoration(
+                gradient: AppColors.brandGradient,
+              ),
             ),
           ),
         ],
@@ -108,7 +136,7 @@ class BadgeChip extends StatelessWidget {
 }
 
 /// A full-width rounded primary button with a gradient background.
-class GradientButton extends StatelessWidget {
+class GradientButton extends StatefulWidget {
   final String label;
   final VoidCallback? onPressed;
   final IconData? icon;
@@ -121,46 +149,64 @@ class GradientButton extends StatelessWidget {
   });
 
   @override
+  State<GradientButton> createState() => _GradientButtonState();
+}
+
+class _GradientButtonState extends State<GradientButton> {
+  bool _pressed = false;
+
+  void _setPressed(bool v) {
+    if (widget.onPressed == null || _pressed == v) return;
+    setState(() => _pressed = v);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final enabled = onPressed != null;
-    return Opacity(
-      opacity: enabled ? 1 : 0.5,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onPressed,
-          borderRadius: BorderRadius.circular(18),
-          child: Ink(
-            decoration: BoxDecoration(
-              gradient: AppColors.brandGradient,
-              borderRadius: BorderRadius.circular(18),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.brandStart.withValues(alpha: 0.35),
-                  blurRadius: 18,
-                  offset: const Offset(0, 8),
-                ),
-              ],
-            ),
-            child: Container(
-              height: 56,
-              alignment: Alignment.center,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (icon != null) ...[
-                    Icon(icon, color: Colors.white, size: 20),
-                    const SizedBox(width: 10),
-                  ],
-                  Text(
-                    label,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 17,
-                      fontWeight: FontWeight.w600,
-                    ),
+    final enabled = widget.onPressed != null;
+    return AnimatedScale(
+      scale: _pressed ? 0.97 : 1.0,
+      duration: const Duration(milliseconds: 130),
+      curve: Curves.easeOut,
+      child: Opacity(
+        opacity: enabled ? 1 : 0.5,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: widget.onPressed,
+            onHighlightChanged: _setPressed,
+            borderRadius: BorderRadius.circular(18),
+            child: Ink(
+              decoration: BoxDecoration(
+                gradient: AppColors.brandGradient,
+                borderRadius: BorderRadius.circular(18),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.brandStart.withValues(alpha: 0.35),
+                    blurRadius: 18,
+                    offset: const Offset(0, 8),
                   ),
                 ],
+              ),
+              child: Container(
+                height: 56,
+                alignment: Alignment.center,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (widget.icon != null) ...[
+                      Icon(widget.icon, color: Colors.white, size: 20),
+                      const SizedBox(width: 10),
+                    ],
+                    Text(
+                      widget.label,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

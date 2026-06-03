@@ -5,11 +5,130 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../state/app_providers.dart';
+import '../../ui/animations/domain_hero.dart';
 import '../../ui/animations/fade_slide.dart';
 import '../../ui/animations/idle_breath.dart';
+import '../../ui/animations/reveal_on_scroll.dart';
 import '../../ui/components/app_components.dart';
 import '../../ui/theme/app_colors.dart';
 import 'domains_data.dart';
+
+// ---------------------------------------------------------------------------
+// Swipe-up animation: phone silhouette + animated finger going bottom→top
+// ---------------------------------------------------------------------------
+
+class _SwipeUpHint extends StatefulWidget {
+  const _SwipeUpHint();
+
+  @override
+  State<_SwipeUpHint> createState() => _SwipeUpHintState();
+}
+
+class _SwipeUpHintState extends State<_SwipeUpHint>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _y;
+  late final Animation<double> _opacity;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    )..repeat();
+
+    // Finger moves from bottom (+14 px) to top (-14 px) of the phone body
+    _y = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween(
+          begin: 14.0,
+          end: -14.0,
+        ).chain(CurveTween(curve: Curves.easeInOut)),
+        weight: 55,
+      ),
+      TweenSequenceItem(tween: ConstantTween(-14.0), weight: 45),
+    ]).animate(_ctrl);
+
+    _opacity = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 0.0, end: 1.0), weight: 12),
+      TweenSequenceItem(tween: ConstantTween(1.0), weight: 43),
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 0.0), weight: 20),
+      TweenSequenceItem(tween: ConstantTween(0.0), weight: 25),
+    ]).animate(_ctrl);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 38,
+      height: 60,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // Phone outline
+          Container(
+            width: 26,
+            height: 46,
+            decoration: BoxDecoration(
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.55),
+                width: 1.5,
+              ),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Column(
+              children: [
+                const SizedBox(height: 6),
+                // Tiny "screen" line to suggest content
+                Center(
+                  child: Container(
+                    width: 14,
+                    height: 1.5,
+                    color: Colors.white.withValues(alpha: 0.25),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Bottom home bar
+          Positioned(
+            bottom: 3,
+            child: Container(
+              width: 10,
+              height: 2,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.45),
+                borderRadius: BorderRadius.circular(1),
+              ),
+            ),
+          ),
+          // Animated finger icon
+          AnimatedBuilder(
+            animation: _ctrl,
+            builder: (_, _) => Transform.translate(
+              offset: Offset(0, _y.value),
+              child: Opacity(
+                opacity: _opacity.value,
+                child: const Icon(
+                  Icons.touch_app_rounded,
+                  color: Colors.white,
+                  size: 15,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 /// Home screen — "Choisis ton domaine".
 ///
@@ -24,8 +143,7 @@ class DomainSelectionScreen extends ConsumerStatefulWidget {
       _DomainSelectionScreenState();
 }
 
-class _DomainSelectionScreenState
-    extends ConsumerState<DomainSelectionScreen> {
+class _DomainSelectionScreenState extends ConsumerState<DomainSelectionScreen> {
   final ScrollController _scroll = ScrollController();
   Timer? _idleTimer;
   Timer? _retentionTimer;
@@ -85,9 +203,12 @@ class _DomainSelectionScreenState
   @override
   Widget build(BuildContext context) {
     final hasProgram = ref.watch(programControllerProvider) != null;
-    final retentionDue = hasProgram && ref.watch(retentionControllerProvider).isDue;
+    final retentionDue =
+        hasProgram && ref.watch(retentionControllerProvider).isDue;
 
     return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: _buildAppBar(context),
       body: Listener(
         behavior: HitTestBehavior.translucent,
         onPointerDown: (_) => _wake(),
@@ -100,12 +221,13 @@ class _DomainSelectionScreenState
             return false;
           },
           child: SafeArea(
+            top: false,
             child: CustomScrollView(
               controller: _scroll,
               slivers: [
                 SliverToBoxAdapter(
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+                    padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -120,57 +242,41 @@ class _DomainSelectionScreenState
                                 onTap: () => context.push('/retention'),
                                 child: Row(
                                   children: [
-                                    const Icon(Icons.psychology_alt_rounded,
-                                        color: AppColors.ink, size: 30),
+                                    Icon(
+                                      Icons.psychology_alt_rounded,
+                                      color: AppColors.ink,
+                                      size: 30,
+                                    ),
                                     const SizedBox(width: 12),
                                     const Expanded(
                                       child: Column(
                                         crossAxisAlignment:
                                             CrossAxisAlignment.start,
                                         children: [
-                                          Text('Quiz de rétention dispo',
-                                              style: TextStyle(
-                                                  fontSize: 16,
-                                                  fontWeight:
-                                                      FontWeight.w800)),
+                                          Text(
+                                            'Quiz de rétention dispo',
+                                            style: TextStyle(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.w800,
+                                            ),
+                                          ),
                                           SizedBox(height: 2),
                                           Text(
-                                              'Vérifions ce que tu as retenu 🧠',
-                                              style: TextStyle(fontSize: 13)),
+                                            'Vérifions ce que tu as retenu 🧠',
+                                            style: TextStyle(fontSize: 13),
+                                          ),
                                         ],
                                       ),
                                     ),
-                                    const Icon(Icons.arrow_forward_ios_rounded,
-                                        size: 16),
+                                    const Icon(
+                                      Icons.arrow_forward_ios_rounded,
+                                      size: 16,
+                                    ),
                                   ],
                                 ),
                               ),
                             ),
                           ),
-                        const FadeSlideIn(
-                          child: Text(
-                            'Choisis ton domaine',
-                            style: TextStyle(
-                              fontSize: 32,
-                              fontWeight: FontWeight.w700,
-                              height: 1.1,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        FadeSlideIn(
-                          delay: const Duration(milliseconds: 80),
-                          child: Text(
-                            'Sélectionne un thème et laisse Lumina créer ton '
-                            'programme sur mesure.',
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: AppColors.inkSoft,
-                              height: 1.35,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 20),
                         // --- Central button #1: learning feed ---
                         FadeSlideIn(
                           delay: const Duration(milliseconds: 100),
@@ -193,6 +299,17 @@ class _DomainSelectionScreenState
                           delay: const Duration(milliseconds: 140),
                           child: _customCard(context),
                         ),
+                        const SizedBox(height: 16),
+                        FadeSlideIn(
+                          delay: const Duration(milliseconds: 160),
+                          child: Row(
+                            children: [
+                              Expanded(child: _flashCard(context)),
+                              const SizedBox(width: 12),
+                              Expanded(child: _expertCard(context)),
+                            ],
+                          ),
+                        ),
                         if (_idle)
                           Padding(
                             padding: const EdgeInsets.only(top: 12),
@@ -200,7 +317,9 @@ class _DomainSelectionScreenState
                               child: Text(
                                 'Touche un bouton pour commencer ✨',
                                 style: TextStyle(
-                                    fontSize: 12, color: AppColors.inkSoft),
+                                  fontSize: 12,
+                                  color: AppColors.inkSoft,
+                                ),
                               ),
                             ),
                           ),
@@ -213,13 +332,21 @@ class _DomainSelectionScreenState
                     padding: const EdgeInsets.fromLTRB(24, 20, 24, 4),
                     child: Row(
                       children: [
-                        const Text('Thèmes populaires',
-                            style: TextStyle(
-                                fontSize: 20, fontWeight: FontWeight.w700)),
+                        const Text(
+                          'Choisis ton domaine',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
                         const Spacer(),
-                        Text('ou crée le tien ↑',
-                            style: TextStyle(
-                                fontSize: 12, color: AppColors.inkSoft)),
+                        Text(
+                          'ou crée le tien ↑',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.inkSoft,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -229,21 +356,15 @@ class _DomainSelectionScreenState
                   sliver: SliverGrid(
                     gridDelegate:
                         const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      mainAxisSpacing: 16,
-                      crossAxisSpacing: 16,
-                      childAspectRatio: 0.92,
-                    ),
-                    delegate: SliverChildBuilderDelegate(
-                      (context, i) {
-                        final d = kDomains[i];
-                        return FadeSlideIn(
-                          delay: Duration(milliseconds: 140 + i * 60),
-                          child: _DomainCard(domain: d),
-                        );
-                      },
-                      childCount: kDomains.length,
-                    ),
+                          crossAxisCount: 2,
+                          mainAxisSpacing: 16,
+                          crossAxisSpacing: 16,
+                          childAspectRatio: 0.92,
+                        ),
+                    delegate: SliverChildBuilderDelegate((context, i) {
+                      final d = kDomains[i];
+                      return RevealOnScroll(child: _DomainCard(domain: d));
+                    }, childCount: kDomains.length),
                   ),
                 ),
               ],
@@ -251,6 +372,122 @@ class _DomainSelectionScreenState
           ),
         ),
       ),
+    );
+  }
+
+  Widget _flashCard(BuildContext context) {
+    return SoftCard(
+      color: AppColors.sun.withValues(alpha: 0.18),
+      padding: const EdgeInsets.all(16),
+      onTap: () {
+        _wake();
+        // Navigate to first domain to pick a sub-theme for Flash
+        context.push('/domain/${kDomains.first.id}');
+      },
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('⚡', style: TextStyle(fontSize: 26)),
+          const SizedBox(height: 8),
+          const Text(
+            'Flash',
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            '5 min · l\'essentiel',
+            style: TextStyle(fontSize: 12, color: AppColors.inkSoft),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _expertCard(BuildContext context) {
+    return SoftCard(
+      color: AppColors.deepPurple.withValues(alpha: 0.14),
+      padding: const EdgeInsets.all(16),
+      onTap: () {
+        _wake();
+        context.push('/domain/${kDomains.first.id}');
+      },
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('🎓', style: TextStyle(fontSize: 26)),
+          const SizedBox(height: 8),
+          const Text(
+            'Expert',
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            '15 ch. · pro',
+            style: TextStyle(fontSize: 12, color: AppColors.inkSoft),
+          ),
+        ],
+      ),
+    );
+  }
+
+  PreferredSizeWidget _buildAppBar(BuildContext context) {
+    final profile = ref.read(userProfileProvider);
+    final initial = profile.pseudo.isNotEmpty
+        ? profile.pseudo[0].toUpperCase()
+        : null;
+
+    return AppBar(
+      backgroundColor: AppColors.background,
+      elevation: 0,
+      centerTitle: true,
+      title: ShaderMask(
+        shaderCallback: (bounds) =>
+            AppColors.brandGradient.createShader(bounds),
+        child: const Text(
+          'apprentik',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 22,
+            fontWeight: FontWeight.w800,
+            letterSpacing: -0.5,
+          ),
+        ),
+      ),
+      actions: [
+        Padding(
+          padding: const EdgeInsets.only(right: 16),
+          child: GestureDetector(
+            onTap: () {
+              _wake();
+              context.push('/profile');
+            },
+            child: Container(
+              width: 36,
+              height: 36,
+              decoration: const BoxDecoration(
+                gradient: AppColors.brandGradient,
+                shape: BoxShape.circle,
+              ),
+              child: Center(
+                child: initial != null
+                    ? Text(
+                        initial,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      )
+                    : const Icon(
+                        Icons.person_rounded,
+                        color: Colors.white,
+                        size: 18,
+                      ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -272,21 +509,27 @@ class _DomainSelectionScreenState
             ),
           ),
           const SizedBox(width: 14),
-          const Expanded(
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Mon propre programme',
-                    style:
-                        TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                Text(
+                  'Mon propre programme',
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+                ),
                 SizedBox(height: 2),
-                Text('Décris un thème, l\'IA construit tout',
-                    style: TextStyle(fontSize: 13, color: AppColors.inkSoft)),
+                Text(
+                  'Décris un thème, l\'IA construit tout',
+                  style: TextStyle(fontSize: 13, color: AppColors.inkSoft),
+                ),
               ],
             ),
           ),
-          const Icon(Icons.arrow_forward_ios_rounded,
-              size: 16, color: AppColors.inkSoft),
+          Icon(
+            Icons.arrow_forward_ios_rounded,
+            size: 16,
+            color: AppColors.inkSoft,
+          ),
         ],
       ),
     );
@@ -317,20 +560,29 @@ class _DomainSelectionScreenState
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Fil d\'apprentissage',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 17,
-                      fontWeight: FontWeight.w700,
-                    )),
+                Text(
+                  'Fil d\'apprentissage',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
                 SizedBox(height: 2),
-                Text('Swipe ↑ • un peu de tout ou par thème',
-                    style: TextStyle(color: Colors.white70, fontSize: 13)),
+                Text(
+                  'Swipe ↑ • un peu de tout ou par thème',
+                  style: TextStyle(color: Colors.white70, fontSize: 13),
+                ),
               ],
             ),
           ),
-          const Icon(Icons.arrow_forward_ios_rounded,
-              color: Colors.white, size: 16),
+          const _SwipeUpHint(),
+          const SizedBox(width: 8),
+          const Icon(
+            Icons.arrow_forward_ios_rounded,
+            color: Colors.white,
+            size: 16,
+          ),
         ],
       ),
     );
@@ -362,9 +614,7 @@ class _DomainSelectionScreenState
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  hasProgram
-                      ? 'Reprendre mon programme'
-                      : 'Crée ton programme',
+                  hasProgram ? 'Reprendre mon programme' : 'Crée ton programme',
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 17,
@@ -400,37 +650,38 @@ class _DomainCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Hero(
-      tag: 'domain-${domain.id}',
-      child: SoftCard(
-        color: domain.color.withValues(alpha: 0.16),
-        padding: const EdgeInsets.all(18),
-        onTap: () => context.push('/generate/${domain.id}'),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            AmbientBob(
+    return SoftCard(
+      color: domain.color.withValues(alpha: 0.16),
+      padding: const EdgeInsets.all(18),
+      onTap: () => context.push('/domain/${domain.id}'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Hero(
+            tag: 'domain-${domain.id}',
+            flightShuttleBuilder: domainHeroShuttle(domain.icon, domain.color),
+            child: AmbientBob(
               distance: 3,
-              // Slightly different rhythm per card so the grid breathes
-              // organically instead of in unison.
               period: Duration(milliseconds: 2000 + domain.id.length * 130),
               child: TintedIcon(
-                  icon: domain.icon, color: domain.color, size: 54),
+                icon: domain.icon,
+                color: domain.color,
+                size: 54,
+              ),
             ),
-            const Spacer(),
-            Text(
-              domain.label,
-              style: const TextStyle(
-                  fontSize: 19, fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              domain.tagline,
-              style: TextStyle(fontSize: 13, color: AppColors.inkSoft),
-            ),
-          ],
-        ),
+          ),
+          const Spacer(),
+          Text(
+            domain.label,
+            style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            domain.tagline,
+            style: TextStyle(fontSize: 13, color: AppColors.inkSoft),
+          ),
+        ],
       ),
     );
   }

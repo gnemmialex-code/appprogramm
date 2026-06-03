@@ -5,16 +5,35 @@
 /// to unit-test.
 library;
 
-enum StepType { text, audio, reflection, action }
+enum StepType {
+  text,
+  reflection,
+  action,
+  fact,
+  tip,
+  challenge,
+  framework,
+  research,
+}
 
 StepType stepTypeFromString(String raw) {
   switch (raw) {
-    case 'audio':
-      return StepType.audio;
     case 'reflection':
       return StepType.reflection;
     case 'action':
       return StepType.action;
+    case 'fact':
+      return StepType.fact;
+    case 'tip':
+      return StepType.tip;
+    case 'challenge':
+      return StepType.challenge;
+    case 'framework':
+      return StepType.framework;
+    case 'research':
+      return StepType.research;
+    case 'audio':
+      return StepType.fact; // legacy fallback
     default:
       return StepType.text;
   }
@@ -45,10 +64,10 @@ class ProgramStep {
   });
 
   factory ProgramStep.fromJson(Map<String, dynamic> json) => ProgramStep(
-        title: json['title'] as String,
-        body: json['body'] as String,
-        type: stepTypeFromString(json['type'] as String? ?? 'text'),
-      );
+    title: json['title'] as String,
+    body: json['body'] as String,
+    type: stepTypeFromString(json['type'] as String? ?? 'text'),
+  );
 }
 
 class Exercise {
@@ -63,10 +82,10 @@ class Exercise {
   });
 
   factory Exercise.fromJson(Map<String, dynamic> json) => Exercise(
-        title: json['title'] as String,
-        instruction: json['instruction'] as String,
-        type: stepTypeFromString(json['type'] as String? ?? 'text'),
-      );
+    title: json['title'] as String,
+    instruction: json['instruction'] as String,
+    type: stepTypeFromString(json['type'] as String? ?? 'text'),
+  );
 }
 
 class Module {
@@ -91,21 +110,21 @@ class Module {
   });
 
   factory Module.fromJson(Map<String, dynamic> json) => Module(
-        id: json['id'] as String,
-        level: json['level'] as int? ?? 1,
-        title: json['title'] as String,
-        summary: json['summary'] as String,
-        content: json['content'] as String,
-        steps: (json['steps'] as List<dynamic>)
-            .map((e) => ProgramStep.fromJson(e as Map<String, dynamic>))
-            .toList(),
-        exercises: (json['exercises'] as List<dynamic>)
-            .map((e) => Exercise.fromJson(e as Map<String, dynamic>))
-            .toList(),
-        quiz: (json['quiz'] as List<dynamic>? ?? [])
-            .map((e) => QuizQuestion.fromJson(e as Map<String, dynamic>))
-            .toList(),
-      );
+    id: json['id'] as String,
+    level: json['level'] as int? ?? 1,
+    title: json['title'] as String,
+    summary: json['summary'] as String,
+    content: json['content'] as String,
+    steps: (json['steps'] as List<dynamic>)
+        .map((e) => ProgramStep.fromJson(e as Map<String, dynamic>))
+        .toList(),
+    exercises: (json['exercises'] as List<dynamic>)
+        .map((e) => Exercise.fromJson(e as Map<String, dynamic>))
+        .toList(),
+    quiz: (json['quiz'] as List<dynamic>? ?? [])
+        .map((e) => QuizQuestion.fromJson(e as Map<String, dynamic>))
+        .toList(),
+  );
 }
 
 class QuizQuestion {
@@ -115,23 +134,47 @@ class QuizQuestion {
   final int answerIndex; // For MCQ.
   final bool answerBool; // For true/false & swipe.
 
+  /// Difficulty: 1 = base, 2 = intermédiaire, 3 = pointu (questions de détail).
+  /// Used by the retention quiz to ramp difficulty up with the learner's
+  /// progress.
+  final int difficulty;
+
+  /// 0-based source chapter index (−1 if it spans several / is unknown). Lets
+  /// the retention quiz favour questions "from the beginning" as you advance.
+  final int chapter;
+
   const QuizQuestion({
     required this.type,
     required this.question,
     this.options = const [],
     this.answerIndex = 0,
     this.answerBool = true,
+    this.difficulty = 1,
+    this.chapter = -1,
   });
 
-  factory QuizQuestion.fromJson(Map<String, dynamic> json) => QuizQuestion(
-        type: quizTypeFromString(json['type'] as String? ?? 'mcq'),
-        question: json['question'] as String,
-        options: (json['options'] as List<dynamic>? ?? [])
-            .map((e) => e as String)
-            .toList(),
-        answerIndex: json['answerIndex'] as int? ?? 0,
-        answerBool: json['answer'] as bool? ?? true,
+  QuizQuestion copyWith({List<String>? options, int? answerIndex}) =>
+      QuizQuestion(
+        type: type,
+        question: question,
+        options: options ?? this.options,
+        answerIndex: answerIndex ?? this.answerIndex,
+        answerBool: answerBool,
+        difficulty: difficulty,
+        chapter: chapter,
       );
+
+  factory QuizQuestion.fromJson(Map<String, dynamic> json) => QuizQuestion(
+    type: quizTypeFromString(json['type'] as String? ?? 'mcq'),
+    question: json['question'] as String,
+    options: (json['options'] as List<dynamic>? ?? [])
+        .map((e) => e as String)
+        .toList(),
+    answerIndex: json['answerIndex'] as int? ?? 0,
+    answerBool: json['answer'] as bool? ?? true,
+    difficulty: json['difficulty'] as int? ?? 1,
+    chapter: json['chapter'] as int? ?? -1,
+  );
 }
 
 /// A "part": a group of 2–3 chapters sharing a theme, with its own
@@ -156,18 +199,18 @@ class ProgramPart {
   });
 
   factory ProgramPart.fromJson(Map<String, dynamic> json) => ProgramPart(
-        id: json['id'] as String,
-        level: json['level'] as int? ?? 1,
-        title: json['title'] as String,
-        subtitle: json['subtitle'] as String? ?? '',
-        intensity: json['intensity'] as String? ?? '',
-        moduleIds: (json['moduleIds'] as List<dynamic>)
-            .map((e) => e as String)
-            .toList(),
-        quiz: (json['quiz'] as List<dynamic>? ?? [])
-            .map((e) => QuizQuestion.fromJson(e as Map<String, dynamic>))
-            .toList(),
-      );
+    id: json['id'] as String,
+    level: json['level'] as int? ?? 1,
+    title: json['title'] as String,
+    subtitle: json['subtitle'] as String? ?? '',
+    intensity: json['intensity'] as String? ?? '',
+    moduleIds: (json['moduleIds'] as List<dynamic>)
+        .map((e) => e as String)
+        .toList(),
+    quiz: (json['quiz'] as List<dynamic>? ?? [])
+        .map((e) => QuizQuestion.fromJson(e as Map<String, dynamic>))
+        .toList(),
+  );
 }
 
 class Program {
@@ -178,6 +221,10 @@ class Program {
   final List<Module> modules;
   final List<ProgramPart> parts;
   final List<QuizQuestion> quiz;
+
+  /// Harder, detail-oriented questions (difficulty 2–3) pooled by the retention
+  /// quiz once the learner has progressed. Not shown on their own screen.
+  final List<QuizQuestion> detailQuiz;
   final String finalSummary;
 
   const Program({
@@ -188,23 +235,27 @@ class Program {
     required this.modules,
     required this.parts,
     required this.quiz,
+    this.detailQuiz = const [],
     required this.finalSummary,
   });
 
   factory Program.fromJson(Map<String, dynamic> json) => Program(
-        domain: json['domain'] as String,
-        level: json['level'] as int,
-        title: json['title'] as String,
-        subtitle: json['subtitle'] as String,
-        modules: (json['modules'] as List<dynamic>)
-            .map((e) => Module.fromJson(e as Map<String, dynamic>))
-            .toList(),
-        parts: (json['parts'] as List<dynamic>? ?? [])
-            .map((e) => ProgramPart.fromJson(e as Map<String, dynamic>))
-            .toList(),
-        quiz: (json['quiz'] as List<dynamic>)
-            .map((e) => QuizQuestion.fromJson(e as Map<String, dynamic>))
-            .toList(),
-        finalSummary: json['finalSummary'] as String,
-      );
+    domain: json['domain'] as String,
+    level: json['level'] as int,
+    title: json['title'] as String,
+    subtitle: json['subtitle'] as String,
+    modules: (json['modules'] as List<dynamic>)
+        .map((e) => Module.fromJson(e as Map<String, dynamic>))
+        .toList(),
+    parts: (json['parts'] as List<dynamic>? ?? [])
+        .map((e) => ProgramPart.fromJson(e as Map<String, dynamic>))
+        .toList(),
+    quiz: (json['quiz'] as List<dynamic>)
+        .map((e) => QuizQuestion.fromJson(e as Map<String, dynamic>))
+        .toList(),
+    detailQuiz: (json['detailQuiz'] as List<dynamic>? ?? [])
+        .map((e) => QuizQuestion.fromJson(e as Map<String, dynamic>))
+        .toList(),
+    finalSummary: json['finalSummary'] as String,
+  );
 }

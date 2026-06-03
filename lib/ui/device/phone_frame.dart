@@ -47,9 +47,13 @@ class PhoneFrame extends StatelessWidget {
                 data: media.copyWith(
                   size: const Size(screenW, screenH),
                   padding: const EdgeInsets.only(
-                      top: safeTop, bottom: safeBottom),
+                    top: safeTop,
+                    bottom: safeBottom,
+                  ),
                   viewPadding: const EdgeInsets.only(
-                      top: safeTop, bottom: safeBottom),
+                    top: safeTop,
+                    bottom: safeBottom,
+                  ),
                   viewInsets: EdgeInsets.zero,
                   devicePixelRatio: 3,
                 ),

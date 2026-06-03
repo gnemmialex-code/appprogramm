@@ -1,10 +1,14 @@
 import 'dart:convert';
 import 'dart:math';
 
+import '../core/ai/expert_generator.dart';
+import '../core/analytics/usage_analytics.dart';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/ai/generator.dart';
 import '../core/models/content_models.dart';
+import '../core/models/note_model.dart';
 import '../core/notifications/notification_service.dart';
 import '../core/storage/app_storage.dart';
 
@@ -15,6 +19,28 @@ final appStorageProvider = Provider<AppStorage>((ref) {
 
 final notificationServiceProvider = Provider<NotificationService>(
   (ref) => NotificationService.instance,
+);
+
+// ---------------------------------------------------------------------------
+// Appearance — light / dark mode (persisted)
+// ---------------------------------------------------------------------------
+
+/// `true` = dark mode. Persisted locally and read back on next launch.
+class DarkModeController extends Notifier<bool> {
+  @override
+  bool build() => ref.read(appStorageProvider).darkMode;
+
+  Future<void> set(bool dark) async {
+    if (dark == state) return;
+    state = dark;
+    await ref.read(appStorageProvider).setDarkMode(dark);
+  }
+
+  Future<void> toggle() => set(!state);
+}
+
+final darkModeProvider = NotifierProvider<DarkModeController, bool>(
+  DarkModeController.new,
 );
 
 // ---------------------------------------------------------------------------
@@ -32,8 +58,18 @@ class ProgramController extends Notifier<Program?> {
   /// Generates a brand-new program for [domain] and persists it.
   /// [objectif] lets the custom-program flow pass a precise learning goal.
   /// Resets progress so the new journey starts clean.
-  Future<void> generate(String domain, {int level = 1, String? objectif}) async {
-    final json = generateContent(domain, level, objectif: objectif);
+  Future<void> generate(
+    String domain, {
+    int level = 1,
+    String? objectif,
+    int avgMinutes = 20,
+  }) async {
+    final json = generateContent(
+      domain,
+      level,
+      objectif: objectif,
+      avgMinutes: avgMinutes,
+    );
     await ref.read(appStorageProvider).saveProgram(json);
     ref.read(progressControllerProvider.notifier).reset();
     state = Program.fromJson(jsonDecode(json) as Map<String, dynamic>);
@@ -51,8 +87,9 @@ class ProgramController extends Notifier<Program?> {
   }
 }
 
-final programControllerProvider =
-    NotifierProvider<ProgramController, Program?>(ProgramController.new);
+final programControllerProvider = NotifierProvider<ProgramController, Program?>(
+  ProgramController.new,
+);
 
 // ---------------------------------------------------------------------------
 // Progress (completed modules, quiz score, badges)
@@ -85,41 +122,45 @@ class ProgressState {
     Map<String, int>? partScores,
     Map<String, int>? moduleTimes,
     Set<String>? badges,
-  }) =>
-      ProgressState(
-        completedModules: completedModules ?? this.completedModules,
-        quizScore: quizScore ?? this.quizScore,
-        quizTotal: quizTotal ?? this.quizTotal,
-        moduleScores: moduleScores ?? this.moduleScores,
-        partScores: partScores ?? this.partScores,
-        moduleTimes: moduleTimes ?? this.moduleTimes,
-        badges: badges ?? this.badges,
-      );
+  }) => ProgressState(
+    completedModules: completedModules ?? this.completedModules,
+    quizScore: quizScore ?? this.quizScore,
+    quizTotal: quizTotal ?? this.quizTotal,
+    moduleScores: moduleScores ?? this.moduleScores,
+    partScores: partScores ?? this.partScores,
+    moduleTimes: moduleTimes ?? this.moduleTimes,
+    badges: badges ?? this.badges,
+  );
 
   Map<String, dynamic> toMap() => {
-        'modules': completedModules.toList(),
-        'quizScore': quizScore,
-        'quizTotal': quizTotal,
-        'moduleScores': moduleScores,
-        'partScores': partScores,
-        'moduleTimes': moduleTimes,
-        'badges': badges.toList(),
-      };
+    'modules': completedModules.toList(),
+    'quizScore': quizScore,
+    'quizTotal': quizTotal,
+    'moduleScores': moduleScores,
+    'partScores': partScores,
+    'moduleTimes': moduleTimes,
+    'badges': badges.toList(),
+  };
 
   factory ProgressState.fromMap(Map<String, dynamic> m) => ProgressState(
-        completedModules:
-            (m['modules'] as List<dynamic>? ?? []).map((e) => e as String).toSet(),
-        quizScore: m['quizScore'] as int? ?? 0,
-        quizTotal: m['quizTotal'] as int? ?? 0,
-        moduleScores: (m['moduleScores'] as Map<dynamic, dynamic>? ?? {})
-            .map((k, v) => MapEntry(k as String, v as int)),
-        partScores: (m['partScores'] as Map<dynamic, dynamic>? ?? {})
-            .map((k, v) => MapEntry(k as String, v as int)),
-        moduleTimes: (m['moduleTimes'] as Map<dynamic, dynamic>? ?? {})
-            .map((k, v) => MapEntry(k as String, v as int)),
-        badges:
-            (m['badges'] as List<dynamic>? ?? []).map((e) => e as String).toSet(),
-      );
+    completedModules: (m['modules'] as List<dynamic>? ?? [])
+        .map((e) => e as String)
+        .toSet(),
+    quizScore: m['quizScore'] as int? ?? 0,
+    quizTotal: m['quizTotal'] as int? ?? 0,
+    moduleScores: (m['moduleScores'] as Map<dynamic, dynamic>? ?? {}).map(
+      (k, v) => MapEntry(k as String, v as int),
+    ),
+    partScores: (m['partScores'] as Map<dynamic, dynamic>? ?? {}).map(
+      (k, v) => MapEntry(k as String, v as int),
+    ),
+    moduleTimes: (m['moduleTimes'] as Map<dynamic, dynamic>? ?? {}).map(
+      (k, v) => MapEntry(k as String, v as int),
+    ),
+    badges: (m['badges'] as List<dynamic>? ?? [])
+        .map((e) => e as String)
+        .toSet(),
+  );
 }
 
 class ProgressController extends Notifier<ProgressState> {
@@ -246,30 +287,29 @@ class ReminderState {
     int? minute,
     int? autoHour,
     int? autoMinute,
-  }) =>
-      ReminderState(
-        enabled: enabled ?? this.enabled,
-        hour: hour ?? this.hour,
-        minute: minute ?? this.minute,
-        autoHour: autoHour ?? this.autoHour,
-        autoMinute: autoMinute ?? this.autoMinute,
-      );
+  }) => ReminderState(
+    enabled: enabled ?? this.enabled,
+    hour: hour ?? this.hour,
+    minute: minute ?? this.minute,
+    autoHour: autoHour ?? this.autoHour,
+    autoMinute: autoMinute ?? this.autoMinute,
+  );
 
   Map<String, dynamic> toMap() => {
-        'enabled': enabled,
-        'hour': hour,
-        'minute': minute,
-        'autoHour': autoHour,
-        'autoMinute': autoMinute,
-      };
+    'enabled': enabled,
+    'hour': hour,
+    'minute': minute,
+    'autoHour': autoHour,
+    'autoMinute': autoMinute,
+  };
 
   factory ReminderState.fromMap(Map<String, dynamic> m) => ReminderState(
-        enabled: m['enabled'] as bool? ?? false,
-        hour: m['hour'] as int? ?? 9,
-        minute: m['minute'] as int? ?? 0,
-        autoHour: m['autoHour'] as int? ?? 19,
-        autoMinute: m['autoMinute'] as int? ?? 0,
-      );
+    enabled: m['enabled'] as bool? ?? false,
+    hour: m['hour'] as int? ?? 9,
+    minute: m['minute'] as int? ?? 0,
+    autoHour: m['autoHour'] as int? ?? 19,
+    autoMinute: m['autoMinute'] as int? ?? 0,
+  );
 }
 
 class ReminderController extends Notifier<ReminderState> {
@@ -344,33 +384,32 @@ class RetentionState {
     int? lastTotal,
     int? checks,
     int? announcedDueMillis,
-  }) =>
-      RetentionState(
-        nextDueMillis: nextDueMillis ?? this.nextDueMillis,
-        lastCheckedMillis: lastCheckedMillis ?? this.lastCheckedMillis,
-        lastScore: lastScore ?? this.lastScore,
-        lastTotal: lastTotal ?? this.lastTotal,
-        checks: checks ?? this.checks,
-        announcedDueMillis: announcedDueMillis ?? this.announcedDueMillis,
-      );
+  }) => RetentionState(
+    nextDueMillis: nextDueMillis ?? this.nextDueMillis,
+    lastCheckedMillis: lastCheckedMillis ?? this.lastCheckedMillis,
+    lastScore: lastScore ?? this.lastScore,
+    lastTotal: lastTotal ?? this.lastTotal,
+    checks: checks ?? this.checks,
+    announcedDueMillis: announcedDueMillis ?? this.announcedDueMillis,
+  );
 
   Map<String, dynamic> toMap() => {
-        'nextDueMillis': nextDueMillis,
-        'lastCheckedMillis': lastCheckedMillis,
-        'lastScore': lastScore,
-        'lastTotal': lastTotal,
-        'checks': checks,
-        'announcedDueMillis': announcedDueMillis,
-      };
+    'nextDueMillis': nextDueMillis,
+    'lastCheckedMillis': lastCheckedMillis,
+    'lastScore': lastScore,
+    'lastTotal': lastTotal,
+    'checks': checks,
+    'announcedDueMillis': announcedDueMillis,
+  };
 
   factory RetentionState.fromMap(Map<String, dynamic> m) => RetentionState(
-        nextDueMillis: m['nextDueMillis'] as int? ?? 0,
-        lastCheckedMillis: m['lastCheckedMillis'] as int? ?? 0,
-        lastScore: m['lastScore'] as int? ?? 0,
-        lastTotal: m['lastTotal'] as int? ?? 0,
-        checks: m['checks'] as int? ?? 0,
-        announcedDueMillis: m['announcedDueMillis'] as int? ?? 0,
-      );
+    nextDueMillis: m['nextDueMillis'] as int? ?? 0,
+    lastCheckedMillis: m['lastCheckedMillis'] as int? ?? 0,
+    lastScore: m['lastScore'] as int? ?? 0,
+    lastTotal: m['lastTotal'] as int? ?? 0,
+    checks: m['checks'] as int? ?? 0,
+    announcedDueMillis: m['announcedDueMillis'] as int? ?? 0,
+  );
 }
 
 class RetentionController extends Notifier<RetentionState> {
@@ -432,7 +471,9 @@ class RetentionController extends Notifier<RetentionState> {
     );
     _persist();
     if (total > 0 && score >= (total * 0.8).ceil()) {
-      ref.read(progressControllerProvider.notifier).awardBadge('Mémoire entretenue');
+      ref
+          .read(progressControllerProvider.notifier)
+          .awardBadge('Mémoire entretenue');
     }
     scheduleNext();
   }
@@ -446,4 +487,320 @@ class RetentionController extends Notifier<RetentionState> {
 
 final retentionControllerProvider =
     NotifierProvider<RetentionController, RetentionState>(
-        RetentionController.new);
+      RetentionController.new,
+    );
+
+// ---------------------------------------------------------------------------
+// User profile
+// ---------------------------------------------------------------------------
+
+class UserProfileState {
+  final String pseudo;
+  final String email;
+
+  const UserProfileState({this.pseudo = '', this.email = ''});
+
+  UserProfileState copyWith({String? pseudo, String? email}) =>
+      UserProfileState(
+        pseudo: pseudo ?? this.pseudo,
+        email: email ?? this.email,
+      );
+
+  Map<String, dynamic> toMap() => {'pseudo': pseudo, 'email': email};
+
+  factory UserProfileState.fromMap(Map<String, dynamic> m) => UserProfileState(
+    pseudo: m['pseudo'] as String? ?? '',
+    email: m['email'] as String? ?? '',
+  );
+}
+
+class UserProfileController extends Notifier<UserProfileState> {
+  @override
+  UserProfileState build() =>
+      UserProfileState.fromMap(ref.read(appStorageProvider).userProfile);
+
+  Future<void> update({String? pseudo, String? email}) async {
+    state = state.copyWith(pseudo: pseudo, email: email);
+    await ref.read(appStorageProvider).saveUserProfile(state.toMap());
+  }
+}
+
+final userProfileProvider =
+    NotifierProvider<UserProfileController, UserProfileState>(
+      UserProfileController.new,
+    );
+
+// ---------------------------------------------------------------------------
+// Daily availability (minutes per day, index 0 = Monday)
+// ---------------------------------------------------------------------------
+
+/// Labels matching kTimeOptions in the profile screen.
+const List<String> kDayNames = [
+  'Lundi',
+  'Mardi',
+  'Mercredi',
+  'Jeudi',
+  'Vendredi',
+  'Samedi',
+  'Dimanche',
+];
+const List<String> kDayShort = [
+  'Lun',
+  'Mar',
+  'Mer',
+  'Jeu',
+  'Ven',
+  'Sam',
+  'Dim',
+];
+
+class DailyAvailabilityState {
+  final List<int> minutesPerDay; // length 7, index 0 = Monday
+
+  const DailyAvailabilityState({
+    this.minutesPerDay = const [15, 15, 15, 15, 15, 25, 25],
+  });
+
+  /// Average over active (>0) days; defaults to 20 if all are 0.
+  int get averageActiveMinutes {
+    final active = minutesPerDay.where((m) => m > 0).toList();
+    if (active.isEmpty) return 20;
+    return active.fold(0, (s, v) => s + v) ~/ active.length;
+  }
+
+  /// Minutes available today (uses current weekday).
+  int get todayMinutes {
+    final wd = DateTime.now().weekday; // 1=Mon, 7=Sun
+    return minutesPerDay[(wd - 1).clamp(0, 6)];
+  }
+
+  DailyAvailabilityState copyWithDay(int dayIndex, int minutes) {
+    final updated = List<int>.from(minutesPerDay);
+    updated[dayIndex] = minutes;
+    return DailyAvailabilityState(minutesPerDay: updated);
+  }
+
+  Map<String, dynamic> toMap() => {'days': minutesPerDay};
+
+  factory DailyAvailabilityState.fromList(List<int> list) =>
+      DailyAvailabilityState(
+        minutesPerDay: list.length == 7 ? list : [15, 15, 15, 15, 15, 25, 25],
+      );
+}
+
+class DailyAvailabilityController extends Notifier<DailyAvailabilityState> {
+  @override
+  DailyAvailabilityState build() => DailyAvailabilityState.fromList(
+    ref.read(appStorageProvider).availabilityPerDay,
+  );
+
+  Future<void> setDay(int dayIndex, int minutes) async {
+    state = state.copyWithDay(dayIndex, minutes);
+    await ref
+        .read(appStorageProvider)
+        .saveAvailabilityPerDay(state.minutesPerDay);
+  }
+}
+
+final dailyAvailabilityProvider =
+    NotifierProvider<DailyAvailabilityController, DailyAvailabilityState>(
+      DailyAvailabilityController.new,
+    );
+
+// ---------------------------------------------------------------------------
+// Usage analytics — tracks app-open times and detects connection habits
+// ---------------------------------------------------------------------------
+
+class UsageAnalyticsStateWrapper {
+  final UsagePattern pattern;
+  final bool reminderEnabled;
+
+  const UsageAnalyticsStateWrapper({
+    required this.pattern,
+    this.reminderEnabled = false,
+  });
+}
+
+class UsageAnalyticsController extends Notifier<UsageAnalyticsStateWrapper> {
+  @override
+  UsageAnalyticsStateWrapper build() {
+    final storage = ref.read(appStorageProvider);
+    return UsageAnalyticsStateWrapper(
+      pattern: analyzeUsagePattern(storage.sessionTimestamps),
+      reminderEnabled: storage.smartReminderEnabled,
+    );
+  }
+
+  /// Called every time the app comes to foreground.
+  /// Throttled: records at most once per 30 minutes to avoid flooding.
+  Future<void> recordOpen() async {
+    final storage = ref.read(appStorageProvider);
+    final existing = storage.sessionTimestamps;
+    final now = DateTime.now().millisecondsSinceEpoch;
+
+    if (existing.isNotEmpty) {
+      final gap = now - existing.last;
+      if (gap < 30 * 60 * 1000) return; // within 30 min — skip
+    }
+
+    await storage.addSessionTimestamp(now);
+    final pattern = analyzeUsagePattern(storage.sessionTimestamps);
+
+    // Auto-enable the smart reminder the first time a good pattern emerges
+    bool reminderEnabled = storage.smartReminderEnabled;
+    if (pattern.isReady && !storage.smartReminderAutoEnabled) {
+      await storage.setSmartReminderEnabled(true);
+      await storage.markSmartReminderAutoEnabled();
+      reminderEnabled = true;
+    }
+
+    state = UsageAnalyticsStateWrapper(
+      pattern: pattern,
+      reminderEnabled: reminderEnabled,
+    );
+
+    // Schedule (or keep) the smart notification
+    if (reminderEnabled && pattern.isReady && pattern.notifyHour != null) {
+      await ref
+          .read(notificationServiceProvider)
+          .scheduleSmartReminder(
+            pattern.notifyHour!,
+            pattern.notifyMinute!,
+            pattern.notifTitle,
+            UsagePattern.notifBody,
+          );
+    }
+  }
+
+  Future<void> setReminderEnabled(bool enabled) async {
+    final storage = ref.read(appStorageProvider);
+    await storage.setSmartReminderEnabled(enabled);
+    state = UsageAnalyticsStateWrapper(
+      pattern: state.pattern,
+      reminderEnabled: enabled,
+    );
+    final notif = ref.read(notificationServiceProvider);
+    if (enabled && state.pattern.isReady && state.pattern.notifyHour != null) {
+      await notif.scheduleSmartReminder(
+        state.pattern.notifyHour!,
+        state.pattern.notifyMinute!,
+        state.pattern.notifTitle,
+        UsagePattern.notifBody,
+      );
+    } else {
+      await notif.cancelSmartReminder();
+    }
+  }
+}
+
+final usageAnalyticsProvider =
+    NotifierProvider<UsageAnalyticsController, UsageAnalyticsStateWrapper>(
+      UsageAnalyticsController.new,
+    );
+
+// ---------------------------------------------------------------------------
+// Expert program controller
+// ---------------------------------------------------------------------------
+
+class ExpertProgramController extends Notifier<Program?> {
+  @override
+  Program? build() {
+    final stored = ref.read(appStorageProvider).expertProgramJson;
+    if (stored == null) return null;
+    return Program.fromJson(jsonDecode(stored) as Map<String, dynamic>);
+  }
+
+  Future<void> generate(String domain, {String? objectif}) async {
+    final json = generateExpertContent(domain, objectif: objectif);
+    await ref.read(appStorageProvider).saveExpertProgram(json);
+    state = Program.fromJson(jsonDecode(json) as Map<String, dynamic>);
+  }
+
+  Future<void> clear() async {
+    await ref.read(appStorageProvider).clearExpertProgram();
+    state = null;
+  }
+}
+
+final expertProgramControllerProvider =
+    NotifierProvider<ExpertProgramController, Program?>(
+      ExpertProgramController.new,
+    );
+
+// ---------------------------------------------------------------------------
+// Notes controller
+// ---------------------------------------------------------------------------
+
+class NotesController extends Notifier<List<AppNote>> {
+  @override
+  List<AppNote> build() {
+    final stored = ref.read(appStorageProvider).notes;
+    final list = stored.map(AppNote.fromMap).toList();
+    // Most recent first.
+    list.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    return list;
+  }
+
+  void _persist() {
+    ref
+        .read(appStorageProvider)
+        .saveNotes(state.map((n) => n.toMap()).toList());
+  }
+
+  /// Returns the existing note for [location] (matched by its unique key), or
+  /// null. A location is unique per (mode, moduleIndex, stepTitle/contextType).
+  AppNote? noteForLocation(NoteLocation location) {
+    final key = _locationKey(location);
+    for (final n in state) {
+      if (_locationKey(n.location) == key) return n;
+    }
+    return null;
+  }
+
+  String _locationKey(NoteLocation l) =>
+      '${l.isExpert}|${l.moduleIndex}|${l.contextType}|${l.stepTitle ?? ''}';
+
+  /// Creates or updates the note attached to [location]. Empty content deletes.
+  void saveNote(NoteLocation location, String content) {
+    final trimmed = content.trim();
+    final existing = noteForLocation(location);
+    final now = DateTime.now();
+
+    if (trimmed.isEmpty) {
+      if (existing != null) {
+        state = state.where((n) => n.id != existing.id).toList();
+        _persist();
+      }
+      return;
+    }
+
+    if (existing != null) {
+      state = [
+        for (final n in state)
+          if (n.id == existing.id)
+            n.copyWith(content: trimmed, updatedAt: now)
+          else
+            n,
+      ]..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    } else {
+      final note = AppNote(
+        id: '${now.millisecondsSinceEpoch}_${state.length}',
+        content: trimmed,
+        createdAt: now,
+        updatedAt: now,
+        location: location,
+      );
+      state = [note, ...state];
+    }
+    _persist();
+  }
+
+  void deleteNote(String id) {
+    state = state.where((n) => n.id != id).toList();
+    _persist();
+  }
+}
+
+final notesProvider = NotifierProvider<NotesController, List<AppNote>>(
+  NotesController.new,
+);

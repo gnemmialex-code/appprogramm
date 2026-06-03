@@ -15,8 +15,10 @@ class RemindersScreen extends ConsumerWidget {
     final reminder = ref.watch(reminderControllerProvider);
     final ctrl = ref.read(reminderControllerProvider.notifier);
     final time = TimeOfDay(hour: reminder.hour, minute: reminder.minute);
-    final autoTime =
-        TimeOfDay(hour: reminder.autoHour, minute: reminder.autoMinute);
+    final autoTime = TimeOfDay(
+      hour: reminder.autoHour,
+      minute: reminder.autoMinute,
+    );
 
     return Scaffold(
       appBar: AppBar(
@@ -56,13 +58,15 @@ class RemindersScreen extends ConsumerWidget {
                 children: [
                   SwitchListTile.adaptive(
                     contentPadding: EdgeInsets.zero,
-                    title: const Text('Activer le rappel quotidien',
-                        style: TextStyle(fontWeight: FontWeight.w700)),
+                    title: const Text(
+                      'Activer le rappel quotidien',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
                     value: reminder.enabled,
                     activeThumbColor: AppColors.brandStart,
                     onChanged: (v) => ctrl.setEnabled(v),
                   ),
-                  const Divider(height: 1, color: AppColors.line),
+                  Divider(height: 1, color: AppColors.line),
                   ListTile(
                     contentPadding: EdgeInsets.zero,
                     enabled: reminder.enabled,
@@ -70,7 +74,9 @@ class RemindersScreen extends ConsumerWidget {
                     trailing: Text(
                       time.format(context),
                       style: const TextStyle(
-                          fontSize: 18, fontWeight: FontWeight.w700),
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                     onTap: reminder.enabled
                         ? () async {
@@ -96,8 +102,10 @@ class RemindersScreen extends ConsumerWidget {
                 ),
               ),
             const SizedBox(height: 24),
-            const Text('Rappel automatique',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+            const Text(
+              'Rappel automatique',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+            ),
             const SizedBox(height: 12),
             SoftCard(
               color: AppColors.mint.withValues(alpha: 0.16),
@@ -105,28 +113,31 @@ class RemindersScreen extends ConsumerWidget {
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.auto_mode_rounded, color: AppColors.ink),
+                      Icon(Icons.auto_mode_rounded, color: AppColors.ink),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
                           'Tant que ton programme n\'est pas terminé, Lumina te '
                           'relance chaque jour — même sans le réglage ci-dessus.',
                           style: TextStyle(
-                              fontSize: 13,
-                              color: AppColors.ink,
-                              height: 1.35),
+                            fontSize: 13,
+                            color: AppColors.ink,
+                            height: 1.35,
+                          ),
                         ),
                       ),
                     ],
                   ),
-                  const Divider(height: 22, color: AppColors.line),
+                  Divider(height: 22, color: AppColors.line),
                   ListTile(
                     contentPadding: EdgeInsets.zero,
                     title: const Text('Heure du rappel automatique'),
                     trailing: Text(
                       autoTime.format(context),
                       style: const TextStyle(
-                          fontSize: 18, fontWeight: FontWeight.w700),
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                     onTap: () async {
                       final picked = await showTimePicker(

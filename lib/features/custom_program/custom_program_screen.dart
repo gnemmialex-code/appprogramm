@@ -48,9 +48,13 @@ class _CustomProgramScreenState extends ConsumerState<CustomProgramScreen> {
 
     // Let the multi-AI animation play for a moment, then build.
     await Future.delayed(const Duration(milliseconds: 2600));
-    await ref.read(programControllerProvider.notifier).generate(
+    await ref
+        .read(programControllerProvider.notifier)
+        .generate(
           theme,
-          objectif: _goalCtrl.text.trim().isEmpty ? null : _goalCtrl.text.trim(),
+          objectif: _goalCtrl.text.trim().isEmpty
+              ? null
+              : _goalCtrl.text.trim(),
         );
     if (!mounted) return;
     context.go('/program');
@@ -89,8 +93,11 @@ class _CustomProgramScreenState extends ConsumerState<CustomProgramScreen> {
             gradient: AppColors.brandGradient,
             child: Row(
               children: [
-                const Icon(Icons.auto_awesome_rounded,
-                    color: Colors.white, size: 36),
+                const Icon(
+                  Icons.auto_awesome_rounded,
+                  color: Colors.white,
+                  size: 36,
+                ),
                 const SizedBox(width: 14),
                 Expanded(
                   child: Text(
@@ -104,8 +111,10 @@ class _CustomProgramScreenState extends ConsumerState<CustomProgramScreen> {
           ),
         ),
         const SizedBox(height: 22),
-        const Text('Ta thématique',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+        const Text(
+          'Ta thématique',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+        ),
         const SizedBox(height: 10),
         SoftCard(
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
@@ -129,15 +138,21 @@ class _CustomProgramScreenState extends ConsumerState<CustomProgramScreen> {
               GestureDetector(
                 onTap: () => setState(() => _themeCtrl.text = ex),
                 child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 8,
+                  ),
                   decoration: BoxDecoration(
                     color: AppColors.lavender.withValues(alpha: 0.18),
                     borderRadius: BorderRadius.circular(16),
                   ),
-                  child: Text(ex,
-                      style: const TextStyle(
-                          fontSize: 13, fontWeight: FontWeight.w600)),
+                  child: Text(
+                    ex,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
               ),
           ],
@@ -147,14 +162,17 @@ class _CustomProgramScreenState extends ConsumerState<CustomProgramScreen> {
           color: AppColors.sky.withValues(alpha: 0.16),
           child: Row(
             children: [
-              const Icon(Icons.stairs_rounded, color: AppColors.ink),
+              Icon(Icons.stairs_rounded, color: AppColors.ink),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
                   'Ton programme inclura automatiquement 3 niveaux : '
                   'Niveau 1 facile, puis 2 et 3 de plus en plus intenses.',
                   style: TextStyle(
-                      fontSize: 13, color: AppColors.ink, height: 1.35),
+                    fontSize: 13,
+                    color: AppColors.ink,
+                    height: 1.35,
+                  ),
                 ),
               ),
             ],
@@ -163,11 +181,15 @@ class _CustomProgramScreenState extends ConsumerState<CustomProgramScreen> {
         const SizedBox(height: 24),
         Row(
           children: [
-            const Text('Ton objectif',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+            const Text(
+              'Ton objectif',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+            ),
             const SizedBox(width: 6),
-            Text('(facultatif)',
-                style: TextStyle(fontSize: 13, color: AppColors.inkSoft)),
+            Text(
+              '(facultatif)',
+              style: TextStyle(fontSize: 13, color: AppColors.inkSoft),
+            ),
           ],
         ),
         const SizedBox(height: 10),
@@ -178,7 +200,8 @@ class _CustomProgramScreenState extends ConsumerState<CustomProgramScreen> {
             textCapitalization: TextCapitalization.sentences,
             decoration: const InputDecoration(
               border: InputBorder.none,
-              hintText: 'Ex : tenir un discours de 5 min sans notes d\'ici 1 mois',
+              hintText:
+                  'Ex : tenir un discours de 5 min sans notes d\'ici 1 mois',
             ),
           ),
         ),
@@ -251,13 +274,12 @@ class _GeneratingViewState extends State<_GeneratingView>
               children: [
                 RotationTransition(
                   turns: _spin,
-                  child: const SizedBox(
+                  child: SizedBox(
                     width: 120,
                     height: 120,
                     child: CircularProgressIndicator(
                       strokeWidth: 6,
-                      valueColor:
-                          AlwaysStoppedAnimation(AppColors.brandStart),
+                      valueColor: AlwaysStoppedAnimation(AppColors.brandStart),
                       backgroundColor: AppColors.line,
                     ),
                   ),
@@ -269,8 +291,11 @@ class _GeneratingViewState extends State<_GeneratingView>
                     gradient: AppColors.brandGradient,
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.auto_awesome_rounded,
-                      color: Colors.white, size: 36),
+                  child: const Icon(
+                    Icons.auto_awesome_rounded,
+                    color: Colors.white,
+                    size: 36,
+                  ),
                 ),
               ],
             ),
@@ -296,10 +321,12 @@ class _GeneratingViewState extends State<_GeneratingView>
                     SizedBox(
                       width: 28,
                       child: done
-                          ? const Icon(Icons.check_circle_rounded,
-                              color: AppColors.success, size: 22)
-                          : Text(emoji,
-                              style: const TextStyle(fontSize: 18)),
+                          ? const Icon(
+                              Icons.check_circle_rounded,
+                              color: AppColors.success,
+                              size: 22,
+                            )
+                          : Text(emoji, style: const TextStyle(fontSize: 18)),
                     ),
                     const SizedBox(width: 10),
                     Expanded(

@@ -79,30 +79,32 @@ class _QuizRunnerState extends State<QuizRunner> {
         const SizedBox(height: 6),
         Align(
           alignment: Alignment.centerRight,
-          child: Text('${_index + 1} / ${quiz.length}',
-              style: TextStyle(color: AppColors.inkSoft, fontSize: 12)),
+          child: Text(
+            '${_index + 1} / ${quiz.length}',
+            style: TextStyle(color: AppColors.inkSoft, fontSize: 12),
+          ),
         ),
         const SizedBox(height: 12),
         Expanded(
           child: switch (q.type) {
             QuizType.mcq => _McqView(
-                question: q,
-                answered: _answered,
-                selected: _selected,
-                onSelect: (i) => _answer(i == q.answerIndex, selectedIndex: i),
-              ),
+              question: q,
+              answered: _answered,
+              selected: _selected,
+              onSelect: (i) => _answer(i == q.answerIndex, selectedIndex: i),
+            ),
             QuizType.trueFalse => _TrueFalseView(
-                question: q,
-                answered: _answered,
-                selected: _selected,
-                onSelect: (val) =>
-                    _answer(val == q.answerBool, selectedIndex: val ? 1 : 0),
-              ),
+              question: q,
+              answered: _answered,
+              selected: _selected,
+              onSelect: (val) =>
+                  _answer(val == q.answerBool, selectedIndex: val ? 1 : 0),
+            ),
             QuizType.swipe => _SwipeView(
-                key: ValueKey(_index),
-                question: q,
-                onSwiped: (val) => _answer(val == q.answerBool),
-              ),
+              key: ValueKey(_index),
+              question: q,
+              onSwiped: (val) => _answer(val == q.answerBool),
+            ),
           },
         ),
         const SizedBox(height: 12),
@@ -132,8 +134,10 @@ class _McqView extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListView(
       children: [
-        Text(question.question,
-            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+        Text(
+          question.question,
+          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+        ),
         const SizedBox(height: 20),
         ...List.generate(question.options.length, (i) {
           final isCorrect = i == question.answerIndex;
@@ -152,13 +156,19 @@ class _McqView extends StatelessWidget {
               child: Row(
                 children: [
                   Expanded(
-                    child: Text(question.options[i],
-                        style: const TextStyle(
-                            fontSize: 16, fontWeight: FontWeight.w600)),
+                    child: Text(
+                      question.options[i],
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
                   if (answered && isCorrect)
-                    const Icon(Icons.check_circle_rounded,
-                        color: AppColors.success),
+                    const Icon(
+                      Icons.check_circle_rounded,
+                      color: AppColors.success,
+                    ),
                   if (answered && isPicked && !isCorrect)
                     const Icon(Icons.cancel_rounded, color: AppColors.danger),
                 ],
@@ -204,9 +214,13 @@ class _TrueFalseView extends StatelessWidget {
             children: [
               Icon(icon, size: 40, color: AppColors.ink),
               const SizedBox(height: 8),
-              Text(label,
-                  style: const TextStyle(
-                      fontSize: 18, fontWeight: FontWeight.w700)),
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ],
           ),
         ),
@@ -216,9 +230,11 @@ class _TrueFalseView extends StatelessWidget {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Text(question.question,
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+        Text(
+          question.question,
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+        ),
         const SizedBox(height: 28),
         Row(
           children: [
@@ -255,8 +271,11 @@ class _SwipeViewState extends State<_SwipeView> {
   Widget build(BuildContext context) {
     if (_gone) {
       return Center(
-        child: Icon(Icons.check_circle_outline_rounded,
-            size: 64, color: AppColors.success),
+        child: Icon(
+          Icons.check_circle_outline_rounded,
+          size: 64,
+          color: AppColors.success,
+        ),
       );
     }
     final angle = _drag.dx / 1200;
@@ -310,8 +329,8 @@ class _SwipeViewState extends State<_SwipeView> {
     final tint = _drag.dx > 30
         ? AppColors.mint
         : _drag.dx < -30
-            ? AppColors.rose
-            : AppColors.lavender;
+        ? AppColors.rose
+        : AppColors.lavender;
     return Container(
       width: 280,
       height: 320,

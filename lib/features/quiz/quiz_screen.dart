@@ -56,7 +56,11 @@ class QuizScreen extends ConsumerWidget {
         title: const Text('Quiz terminé 🎯'),
         content: Text(
           'Ton score : $score / $total\n\n'
-          '${score == total ? 'Sans faute, impressionnant !' : score >= total / 2 ? 'Beau travail, continue !' : 'Rejoue pour progresser.'}',
+          '${score == total
+              ? 'Sans faute, impressionnant !'
+              : score >= total / 2
+              ? 'Beau travail, continue !'
+              : 'Rejoue pour progresser.'}',
           style: const TextStyle(height: 1.4),
         ),
         actions: [

@@ -19,6 +19,7 @@ class NotificationService {
   static const _dailyId = 1001;
   static const _continueId = 1002;
   static const _retentionId = 1003;
+  static const _smartId = 1004;
   static const _channelId = 'lumina_reminders';
 
   Future<void> init() async {
@@ -44,11 +45,13 @@ class NotificationService {
     try {
       await _plugin
           .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin>()
+            AndroidFlutterLocalNotificationsPlugin
+          >()
           ?.requestNotificationsPermission();
       await _plugin
           .resolvePlatformSpecificImplementation<
-              IOSFlutterLocalNotificationsPlugin>()
+            IOSFlutterLocalNotificationsPlugin
+          >()
           ?.requestPermissions(alert: true, badge: true, sound: true);
     } catch (e) {
       debugPrint('requestPermissions failed: $e');
@@ -100,7 +103,8 @@ class NotificationService {
       await _plugin.zonedSchedule(
         id: _continueId,
         title: 'Ton programme t\'attend 📚',
-        body: 'Il te reste des chapitres à terminer. Avance un peu aujourd\'hui !',
+        body:
+            'Il te reste des chapitres à terminer. Avance un peu aujourd\'hui !',
         scheduledDate: _nextInstanceOf(hour, minute),
         notificationDetails: const NotificationDetails(
           android: AndroidNotificationDetails(
@@ -158,6 +162,49 @@ class NotificationService {
     }
   }
 
+  /// Personalised smart reminder — fires [hour]:[minute] every day.
+  Future<void> scheduleSmartReminder(
+    int hour,
+    int minute,
+    String title,
+    String body,
+  ) async {
+    if (!_ready) return;
+    try {
+      await requestPermissions();
+      await _plugin.cancel(id: _smartId);
+      await _plugin.zonedSchedule(
+        id: _smartId,
+        title: title,
+        body: body,
+        scheduledDate: _nextInstanceOf(hour, minute),
+        notificationDetails: const NotificationDetails(
+          android: AndroidNotificationDetails(
+            _channelId,
+            'Rappels',
+            channelDescription: 'Rappels quotidiens de pratique',
+            importance: Importance.high,
+            priority: Priority.high,
+          ),
+          iOS: DarwinNotificationDetails(),
+        ),
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        matchDateTimeComponents: DateTimeComponents.time,
+      );
+    } catch (e) {
+      debugPrint('scheduleSmartReminder failed: $e');
+    }
+  }
+
+  Future<void> cancelSmartReminder() async {
+    if (!_ready) return;
+    try {
+      await _plugin.cancel(id: _smartId);
+    } catch (e) {
+      debugPrint('cancelSmartReminder failed: $e');
+    }
+  }
+
   Future<void> cancelRetention() async {
     if (!_ready) return;
     try {
@@ -169,8 +216,14 @@ class NotificationService {
 
   tz.TZDateTime _nextInstanceOf(int hour, int minute) {
     final now = tz.TZDateTime.now(tz.local);
-    var scheduled =
-        tz.TZDateTime(tz.local, now.year, now.month, now.day, hour, minute);
+    var scheduled = tz.TZDateTime(
+      tz.local,
+      now.year,
+      now.month,
+      now.day,
+      hour,
+      minute,
+    );
     if (scheduled.isBefore(now)) {
       scheduled = scheduled.add(const Duration(days: 1));
     }

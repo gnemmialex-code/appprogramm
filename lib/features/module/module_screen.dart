@@ -4,10 +4,13 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/adaptive/adaptive.dart';
 import '../../core/models/content_models.dart';
+import '../../core/models/note_model.dart';
 import '../../state/app_providers.dart';
 import '../../ui/components/app_components.dart';
 import '../../ui/theme/app_colors.dart';
-import '../exercises/exercise_widgets.dart';
+import '../exercises/exercise_widgets.dart'
+    show ExerciseTile, StepInteractive, colorForStep, iconForStep, labelForStep;
+import '../notes/note_widgets.dart';
 import '../quiz/quiz_runner.dart';
 
 /// A single chapter, learned as a **vertical TikTok-style feed** (text):
@@ -15,7 +18,18 @@ import '../quiz/quiz_runner.dart';
 /// adaptive reinforcement, each step, exercises, and the mini-quiz.
 class ModuleScreen extends ConsumerStatefulWidget {
   final int index;
-  const ModuleScreen({super.key, required this.index});
+
+  /// If provided, uses this program instead of the one from the provider.
+  final Program? programOverride;
+
+  /// True when displaying an expert-mode chapter (affects note location).
+  final bool isExpert;
+  const ModuleScreen({
+    super.key,
+    required this.index,
+    this.programOverride,
+    this.isExpert = false,
+  });
 
   @override
   ConsumerState<ModuleScreen> createState() => _ModuleScreenState();
@@ -40,8 +54,10 @@ class _ModuleScreenState extends ConsumerState<ModuleScreen> {
   }
 
   void _finish(String moduleId) {
-    final seconds =
-        DateTime.now().difference(_openedAt).inSeconds.clamp(0, 30 * 60);
+    final seconds = DateTime.now()
+        .difference(_openedAt)
+        .inSeconds
+        .clamp(0, 30 * 60);
     final notifier = ref.read(progressControllerProvider.notifier);
     notifier.recordModuleTime(moduleId, seconds);
     notifier.completeModule(moduleId);
@@ -56,7 +72,8 @@ class _ModuleScreenState extends ConsumerState<ModuleScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final program = ref.watch(programControllerProvider);
+    final program =
+        widget.programOverride ?? ref.watch(programControllerProvider);
     if (program == null || widget.index >= program.modules.length) {
       return const Scaffold(body: Center(child: Text('Module introuvable')));
     }
@@ -68,15 +85,32 @@ class _ModuleScreenState extends ConsumerState<ModuleScreen> {
       widget.index,
     );
 
+    // Helper to build a note location for this module/context.
+    NoteLocation loc(String contextType, [String? stepTitle]) => NoteLocation(
+      programDomain: program.domain,
+      moduleTitle: module.title,
+      moduleIndex: widget.index,
+      stepTitle: stepTitle,
+      contextType: contextType,
+      isExpert: widget.isExpert,
+    );
+
     final pages = <Widget>[
-      _IntroCard(module: module),
+      _IntroCard(module: module, noteLocation: loc('intro')),
       if (reinforce.isNotEmpty) _ReinforcementCard(topics: reinforce),
-      ...module.steps.map((s) => _StepCard(step: s, onValidate: _next)),
+      ...module.steps.map(
+        (s) => _StepCard(
+          step: s,
+          onValidate: _next,
+          noteLocation: loc('step', s.title),
+        ),
+      ),
       _ExercisesCard(
         module: module,
         reinforcement: reinforcementExercises(reinforce),
         hasQuiz: hasQuiz,
         onNext: hasQuiz ? _next : () => _finish(module.id),
+        noteLocation: loc('exercises'),
       ),
       if (hasQuiz)
         _QuizCard(
@@ -124,15 +158,20 @@ class _ModuleScreenState extends ConsumerState<ModuleScreen> {
                       value: (_page + 1) / pages.length,
                       minHeight: 6,
                       backgroundColor: Colors.black.withValues(alpha: 0.12),
-                      valueColor:
-                          const AlwaysStoppedAnimation(AppColors.brandStart),
+                      valueColor: const AlwaysStoppedAnimation(
+                        AppColors.brandStart,
+                      ),
                     ),
                   ),
                 ),
                 const SizedBox(width: 10),
-                Text('${_page + 1}/${pages.length}',
-                    style: const TextStyle(
-                        fontWeight: FontWeight.w700, fontSize: 12)),
+                Text(
+                  '${_page + 1}/${pages.length}',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                  ),
+                ),
               ],
             ),
           ),
@@ -235,12 +274,17 @@ class _SwipeHintState extends State<_SwipeHint>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.keyboard_arrow_up_rounded,
-                    color: AppColors.inkSoft.withValues(alpha: 0.8)),
-                Text('Glisse vers le haut',
-                    style: TextStyle(
-                        fontSize: 12,
-                        color: AppColors.inkSoft.withValues(alpha: 0.8))),
+                Icon(
+                  Icons.keyboard_arrow_up_rounded,
+                  color: AppColors.inkSoft.withValues(alpha: 0.8),
+                ),
+                Text(
+                  'Glisse vers le haut',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppColors.inkSoft.withValues(alpha: 0.8),
+                  ),
+                ),
               ],
             ),
           ),
@@ -280,11 +324,14 @@ class _WhiteButton extends StatelessWidget {
                 Icon(icon, color: textColor, size: 20),
                 const SizedBox(width: 10),
               ],
-              Text(label,
-                  style: TextStyle(
-                      color: textColor,
-                      fontSize: 17,
-                      fontWeight: FontWeight.w700)),
+              Text(
+                label,
+                style: TextStyle(
+                  color: textColor,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ],
           ),
         ),
@@ -318,7 +365,8 @@ class _SheetCard extends StatelessWidget {
 
 class _IntroCard extends StatelessWidget {
   final Module module;
-  const _IntroCard({required this.module});
+  final NoteLocation noteLocation;
+  const _IntroCard({required this.module, required this.noteLocation});
 
   @override
   Widget build(BuildContext context) {
@@ -333,26 +381,37 @@ class _IntroCard extends StatelessWidget {
             color: const [AppColors.mint, AppColors.sun, AppColors.rose][lvl],
           ),
           const SizedBox(height: 14),
-          Text(module.title,
-              style: const TextStyle(
-                  fontSize: 28, fontWeight: FontWeight.w800, height: 1.1)),
+          Text(
+            module.title,
+            style: const TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.w800,
+              height: 1.1,
+            ),
+          ),
           const SizedBox(height: 14),
           SoftCard(
             color: AppColors.lavender.withValues(alpha: 0.16),
-            child: Text(module.content,
-                style: const TextStyle(fontSize: 16, height: 1.5)),
+            child: Text(
+              module.content,
+              style: const TextStyle(fontSize: 16, height: 1.5),
+            ),
           ),
+          const SizedBox(height: 16),
+          NoteButton(location: noteLocation),
           const SizedBox(height: 16),
           Row(
             children: [
-              const Icon(Icons.swipe_vertical_rounded,
-                  color: AppColors.inkSoft, size: 20),
+              Icon(
+                Icons.swipe_vertical_rounded,
+                color: AppColors.inkSoft,
+                size: 20,
+              ),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   'Glisse vers le haut pour apprendre, étape par étape.',
-                  style:
-                      TextStyle(fontSize: 13, color: AppColors.inkSoft),
+                  style: TextStyle(fontSize: 13, color: AppColors.inkSoft),
                 ),
               ),
             ],
@@ -377,12 +436,16 @@ class _ReinforcementCard extends StatelessWidget {
           Row(
             children: [
               TintedIcon(
-                  icon: Icons.replay_rounded, color: AppColors.peach, size: 52),
+                icon: Icons.replay_rounded,
+                color: AppColors.peach,
+                size: 52,
+              ),
               const SizedBox(width: 14),
               const Expanded(
-                child: Text('On y revient un instant',
-                    style:
-                        TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+                child: Text(
+                  'On y revient un instant',
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+                ),
               ),
             ],
           ),
@@ -390,8 +453,11 @@ class _ReinforcementCard extends StatelessWidget {
           Text(
             'Ton parcours s\'adapte à toi : un rappel des sujets sur lesquels '
             'tu as pris ton temps, pour bien les ancrer.',
-            style:
-                TextStyle(fontSize: 15, color: AppColors.inkSoft, height: 1.4),
+            style: TextStyle(
+              fontSize: 15,
+              color: AppColors.inkSoft,
+              height: 1.4,
+            ),
           ),
           const SizedBox(height: 16),
           ...topics.map(
@@ -405,14 +471,19 @@ class _ReinforcementCard extends StatelessWidget {
                     Row(
                       children: [
                         Expanded(
-                          child: Text(t.subject,
-                              style: const TextStyle(
-                                  fontSize: 16, fontWeight: FontWeight.w700)),
+                          child: Text(
+                            t.subject,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
                         ),
                         BadgeChip(
-                            label: t.reason,
-                            icon: Icons.bolt_rounded,
-                            color: AppColors.peach),
+                          label: t.reason,
+                          icon: Icons.bolt_rounded,
+                          color: AppColors.peach,
+                        ),
                       ],
                     ),
                     const SizedBox(height: 8),
@@ -424,8 +495,10 @@ class _ReinforcementCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Center(
-            child: Text('Glisse vers le haut pour continuer ↑',
-                style: TextStyle(fontSize: 12, color: AppColors.inkSoft)),
+            child: Text(
+              'Glisse vers le haut pour continuer ↑',
+              style: TextStyle(fontSize: 12, color: AppColors.inkSoft),
+            ),
           ),
         ],
       ),
@@ -437,19 +510,19 @@ class _ReinforcementCard extends StatelessWidget {
 class _StepCard extends StatelessWidget {
   final ProgramStep step;
   final VoidCallback onValidate;
-  const _StepCard({required this.step, required this.onValidate});
+  final NoteLocation noteLocation;
+  const _StepCard({
+    required this.step,
+    required this.onValidate,
+    required this.noteLocation,
+  });
 
   @override
   Widget build(BuildContext context) {
     final color = colorForStep(step.type);
     final deep = Color.lerp(color, Colors.black, 0.55)!;
     final pad = MediaQuery.of(context).padding;
-    final label = switch (step.type) {
-      StepType.audio => 'Écoute',
-      StepType.reflection => 'Réflexion',
-      StepType.action => 'Action',
-      StepType.text => 'Lecture',
-    };
+    final label = labelForStep(step.type);
 
     return Container(
       decoration: BoxDecoration(
@@ -467,8 +540,10 @@ class _StepCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.22),
                   borderRadius: BorderRadius.circular(14),
@@ -476,14 +551,16 @@ class _StepCard extends StatelessWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(iconForStep(step.type),
-                        size: 16, color: Colors.white),
+                    Icon(iconForStep(step.type), size: 16, color: Colors.white),
                     const SizedBox(width: 6),
-                    Text(label,
-                        style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 12)),
+                    Text(
+                      label,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -493,20 +570,28 @@ class _StepCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const SizedBox(height: 18),
-                      Text(step.title,
-                          style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 28,
-                              fontWeight: FontWeight.w800,
-                              height: 1.1)),
+                      Text(
+                        step.title,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 28,
+                          fontWeight: FontWeight.w800,
+                          height: 1.1,
+                        ),
+                      ),
                       const SizedBox(height: 14),
-                      Text(step.body,
-                          style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.95),
-                              fontSize: 17,
-                              height: 1.5)),
+                      Text(
+                        step.body,
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.95),
+                          fontSize: 17,
+                          height: 1.5,
+                        ),
+                      ),
                       const SizedBox(height: 20),
                       StepInteractive(type: step.type),
+                      const SizedBox(height: 16),
+                      NoteButton(location: noteLocation, onDark: true),
                     ],
                   ),
                 ),
@@ -532,11 +617,13 @@ class _ExercisesCard extends StatelessWidget {
   final List<Exercise> reinforcement;
   final bool hasQuiz;
   final VoidCallback onNext;
+  final NoteLocation noteLocation;
   const _ExercisesCard({
     required this.module,
     this.reinforcement = const [],
     required this.hasQuiz,
     required this.onNext,
+    required this.noteLocation,
   });
 
   @override
@@ -545,25 +632,32 @@ class _ExercisesCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Exercices',
-              style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800)),
+          const Text(
+            'Exercices',
+            style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800),
+          ),
           const SizedBox(height: 6),
-          Text('Mets en pratique ce que tu viens de voir.',
-              style: TextStyle(color: AppColors.inkSoft)),
+          Text(
+            'Mets en pratique ce que tu viens de voir.',
+            style: TextStyle(color: AppColors.inkSoft),
+          ),
           const SizedBox(height: 16),
           if (reinforcement.isNotEmpty) ...[
             Row(
               children: const [
                 Icon(Icons.bolt_rounded, color: AppColors.peach),
                 SizedBox(width: 6),
-                Text('Renforcement ciblé',
-                    style:
-                        TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                Text(
+                  'Renforcement ciblé',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                ),
               ],
             ),
             const SizedBox(height: 4),
-            Text('Des exercices en plus sur les sujets où tu as pris ton temps.',
-                style: TextStyle(fontSize: 13, color: AppColors.inkSoft)),
+            Text(
+              'Des exercices en plus sur les sujets où tu as pris ton temps.',
+              style: TextStyle(fontSize: 13, color: AppColors.inkSoft),
+            ),
             const SizedBox(height: 12),
             ...reinforcement.map(
               (e) => Padding(
@@ -571,7 +665,7 @@ class _ExercisesCard extends StatelessWidget {
                 child: ExerciseTile(exercise: e),
               ),
             ),
-            const Divider(height: 28, color: AppColors.line),
+            Divider(height: 28, color: AppColors.line),
           ],
           ...module.exercises.map(
             (e) => Padding(
@@ -579,7 +673,9 @@ class _ExercisesCard extends StatelessWidget {
               child: ExerciseTile(exercise: e),
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
+          NoteButton(location: noteLocation),
+          const SizedBox(height: 12),
           GradientButton(
             label: hasQuiz ? 'Passer au quiz' : 'Terminer le module',
             icon: hasQuiz ? Icons.quiz_rounded : Icons.flag_rounded,
@@ -606,11 +702,15 @@ class _QuizCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Mini-quiz du chapitre',
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+            const Text(
+              'Mini-quiz du chapitre',
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+            ),
             const SizedBox(height: 4),
-            Text('Vérifie ce que tu as retenu pour valider le chapitre.',
-                style: TextStyle(color: AppColors.inkSoft)),
+            Text(
+              'Vérifie ce que tu as retenu pour valider le chapitre.',
+              style: TextStyle(color: AppColors.inkSoft),
+            ),
             const SizedBox(height: 12),
             Expanded(
               child: QuizRunner(

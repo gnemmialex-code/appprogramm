@@ -27,7 +27,9 @@ class AppStorage {
   // --- Progress (completed module ids, quiz score, badges) -------------------
   Map<String, dynamic> get progress {
     final raw = _box.get('progress') as String?;
-    if (raw == null) return {'modules': <String>[], 'quizScore': 0, 'badges': <String>[]};
+    if (raw == null) {
+      return {'modules': <String>[], 'quizScore': 0, 'badges': <String>[]};
+    }
     return jsonDecode(raw) as Map<String, dynamic>;
   }
 
@@ -53,6 +55,75 @@ class AppStorage {
 
   Future<void> saveRetention(Map<String, dynamic> data) =>
       _box.put('retention', jsonEncode(data));
+
+  // --- Notes -----------------------------------------------------------------
+  /// All notes stored as a JSON list of note maps.
+  List<Map<String, dynamic>> get notes {
+    final raw = _box.get('notes') as String?;
+    if (raw == null) return [];
+    return (jsonDecode(raw) as List<dynamic>)
+        .map((e) => e as Map<String, dynamic>)
+        .toList();
+  }
+
+  Future<void> saveNotes(List<Map<String, dynamic>> data) =>
+      _box.put('notes', jsonEncode(data));
+
+  // --- Expert program --------------------------------------------------------
+  String? get expertProgramJson => _box.get('expertProgram') as String?;
+  Future<void> saveExpertProgram(String json) =>
+      _box.put('expertProgram', json);
+  Future<void> clearExpertProgram() => _box.delete('expertProgram');
+
+  // --- Usage analytics (session open timestamps) ----------------------------
+  List<int> get sessionTimestamps {
+    final raw = _box.get('sessions') as String?;
+    if (raw == null) return [];
+    return (jsonDecode(raw) as List<dynamic>).map((e) => e as int).toList();
+  }
+
+  /// Appends [ts] and keeps the last 90 entries (~30 days × 3 opens/day).
+  Future<void> addSessionTimestamp(int ts) async {
+    var list = sessionTimestamps..add(ts);
+    if (list.length > 90) list = list.sublist(list.length - 90);
+    await _box.put('sessions', jsonEncode(list));
+  }
+
+  bool get smartReminderEnabled =>
+      _box.get('smartReminderEnabled') as bool? ?? false;
+  Future<void> setSmartReminderEnabled(bool v) =>
+      _box.put('smartReminderEnabled', v);
+
+  // Whether we've ever auto-enabled the smart reminder (to avoid re-enabling
+  // after the user explicitly turns it off).
+  bool get smartReminderAutoEnabled =>
+      _box.get('smartReminderAutoEnabled') as bool? ?? false;
+  Future<void> markSmartReminderAutoEnabled() =>
+      _box.put('smartReminderAutoEnabled', true);
+
+  // --- Daily availability (minutes per day, index 0 = Monday) --------------
+  List<int> get availabilityPerDay {
+    final raw = _box.get('availability') as String?;
+    if (raw == null) return [15, 15, 15, 15, 15, 25, 25];
+    return (jsonDecode(raw) as List<dynamic>).map((e) => e as int).toList();
+  }
+
+  Future<void> saveAvailabilityPerDay(List<int> data) =>
+      _box.put('availability', jsonEncode(data));
+
+  // --- User profile ----------------------------------------------------------
+  Map<String, dynamic> get userProfile {
+    final raw = _box.get('userProfile') as String?;
+    if (raw == null) return {'pseudo': '', 'email': ''};
+    return jsonDecode(raw) as Map<String, dynamic>;
+  }
+
+  Future<void> saveUserProfile(Map<String, dynamic> data) =>
+      _box.put('userProfile', jsonEncode(data));
+
+  // --- Appearance (dark mode) ------------------------------------------------
+  bool get darkMode => _box.get('darkMode') as bool? ?? false;
+  Future<void> setDarkMode(bool v) => _box.put('darkMode', v);
 
   Future<void> wipe() => _box.clear();
 }

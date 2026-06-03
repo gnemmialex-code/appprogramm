@@ -80,14 +80,14 @@ List<ReinforcementTopic> reinforcementFor(
     final total = m.quiz.length;
     final score = p.moduleScores[m.id];
     final lowScore = score != null && total > 0 && score / total < 0.6;
-    topics.add(ReinforcementTopic(
-      moduleId: m.id,
-      subject: subjectOf(m.title),
-      recap: m.summary,
-      reason: lowScore
-          ? 'Quiz à consolider'
-          : 'Tu y as pris ton temps',
-    ));
+    topics.add(
+      ReinforcementTopic(
+        moduleId: m.id,
+        subject: subjectOf(m.title),
+        recap: m.summary,
+        reason: lowScore ? 'Quiz à consolider' : 'Tu y as pris ton temps',
+      ),
+    );
   }
   return topics;
 }
@@ -96,13 +96,13 @@ List<ReinforcementTopic> reinforcementFor(
 /// later chapter doesn't just recap the weak subject, it makes the user
 /// actively practise it again.
 List<Exercise> reinforcementExercises(List<ReinforcementTopic> topics) => [
-      for (final t in topics)
-        Exercise(
-          title: 'Renforcement : ${t.subject}',
-          instruction:
-              'Réexplique « ${t.subject} » avec tes propres mots, comme si tu '
-              'l\'enseignais à un ami. Puis applique-le concrètement une fois '
-              'aujourd\'hui.',
-          type: StepType.reflection,
-        ),
-    ];
+  for (final t in topics)
+    Exercise(
+      title: 'Renforcement : ${t.subject}',
+      instruction:
+          'Réexplique « ${t.subject} » avec tes propres mots, comme si tu '
+          'l\'enseignais à un ami. Puis applique-le concrètement une fois '
+          'aujourd\'hui.',
+      type: StepType.reflection,
+    ),
+];

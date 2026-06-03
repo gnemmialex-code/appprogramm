@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/adaptive/recommendation_engine.dart';
 import '../../state/app_providers.dart';
 import '../../ui/animations/fade_slide.dart';
 import '../../ui/components/app_components.dart';
 import '../../ui/theme/app_colors.dart';
+import '../recommendation/recommendation_section.dart';
 
 /// Final questionnaire followed by an AI-style summary and personalised plan.
 class FinalReportScreen extends ConsumerStatefulWidget {
@@ -53,11 +55,15 @@ class _FinalReportScreenState extends ConsumerState<FinalReportScreen> {
       key: const ValueKey('q'),
       padding: const EdgeInsets.all(20),
       children: [
-        const Text('Questionnaire final',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
+        const Text(
+          'Questionnaire final',
+          style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
+        ),
         const SizedBox(height: 6),
-        Text('Réponds honnêtement pour personnaliser ton plan.',
-            style: TextStyle(color: AppColors.inkSoft)),
+        Text(
+          'Réponds honnêtement pour personnaliser ton plan.',
+          style: TextStyle(color: AppColors.inkSoft),
+        ),
         const SizedBox(height: 20),
         ...List.generate(_questions.length, (i) {
           return FadeSlideIn(
@@ -68,9 +74,13 @@ class _FinalReportScreenState extends ConsumerState<FinalReportScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(_questions[i],
-                        style: const TextStyle(
-                            fontSize: 16, fontWeight: FontWeight.w700)),
+                    Text(
+                      _questions[i],
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                     const SizedBox(height: 12),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -135,24 +145,34 @@ class _FinalReportScreenState extends ConsumerState<FinalReportScreen> {
                   children: [
                     Icon(Icons.auto_awesome_rounded, color: Colors.white),
                     SizedBox(width: 8),
-                    Text('Résumé généré par IA',
-                        style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 16)),
+                    Text(
+                      'Résumé généré par IA',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 16,
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 12),
-                Text(summary,
-                    style: const TextStyle(
-                        color: Colors.white, height: 1.5, fontSize: 15)),
+                Text(
+                  summary,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    height: 1.5,
+                    fontSize: 15,
+                  ),
+                ),
               ],
             ),
           ),
         ),
         const SizedBox(height: 20),
-        const Text('Ton plan personnalisé',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+        const Text(
+          'Ton plan personnalisé',
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+        ),
         const SizedBox(height: 12),
         ...List.generate(plan.length, (i) {
           return FadeSlideIn(
@@ -170,21 +190,37 @@ class _FinalReportScreenState extends ConsumerState<FinalReportScreen> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                       alignment: Alignment.center,
-                      child: Text('${i + 1}',
-                          style: const TextStyle(
-                              fontWeight: FontWeight.w800)),
+                      child: Text(
+                        '${i + 1}',
+                        style: const TextStyle(fontWeight: FontWeight.w800),
+                      ),
                     ),
                     const SizedBox(width: 14),
                     Expanded(
-                        child: Text(plan[i],
-                            style: const TextStyle(height: 1.4))),
+                      child: Text(plan[i], style: const TextStyle(height: 1.4)),
+                    ),
                   ],
                 ),
               ),
             ),
           );
         }),
-        const SizedBox(height: 12),
+        const SizedBox(height: 24),
+        // --- Recommendations for what to learn next ---
+        Builder(
+          builder: (context) {
+            final program = ref.read(programControllerProvider);
+            final progress = ref.read(progressControllerProvider);
+            if (program == null) return const SizedBox.shrink();
+            final report = buildCompletionReport(program, progress);
+            if (report.recommendations.isEmpty) return const SizedBox.shrink();
+            return FadeSlideIn(
+              delay: const Duration(milliseconds: 120),
+              child: RecommendationSection(report: report),
+            );
+          },
+        ),
+        const SizedBox(height: 20),
         GradientButton(
           label: 'Terminer',
           icon: Icons.check_rounded,
@@ -198,8 +234,8 @@ class _FinalReportScreenState extends ConsumerState<FinalReportScreen> {
     final cadence = motivation > 0.6
         ? 'chaque jour'
         : motivation > 0.3
-            ? '5 jours par semaine'
-            : '3 jours par semaine';
+        ? '5 jours par semaine'
+        : '3 jours par semaine';
     return [
       'Pratique $domain $cadence pendant 10 minutes.',
       'Relis un module clé en début de semaine pour ancrer les acquis.',

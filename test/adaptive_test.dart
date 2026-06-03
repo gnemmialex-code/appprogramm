@@ -10,7 +10,8 @@ import 'package:lumina/state/app_providers.dart';
 
 void main() {
   Program program() => Program.fromJson(
-      jsonDecode(generateContent('Productivité', 1)) as Map<String, dynamic>);
+    jsonDecode(generateContent('Productivité', 1)) as Map<String, dynamic>,
+  );
 
   group('struggle detection', () {
     test('flags a chapter with a weak mini-quiz score', () {
@@ -80,7 +81,7 @@ void main() {
 
       final quiz = buildRetentionQuiz(
         p,
-        count: 8,
+        completedModules: 2,
         rng: Random(7),
         focusModuleIds: {m1.id},
       );
