@@ -52,21 +52,47 @@ QuizType quizTypeFromString(String raw) {
   }
 }
 
+/// An inline question shown on a step card.
+/// [answerIndex] = -1 → self-assessment (no wrong answer, both choices get positive feedback).
+class StepQuestion {
+  final String question;
+  final List<String> options;
+  final int answerIndex;
+
+  const StepQuestion({
+    required this.question,
+    required this.options,
+    this.answerIndex = -1,
+  });
+
+  factory StepQuestion.fromJson(Map<String, dynamic> json) => StepQuestion(
+    question: json['question'] as String,
+    options:
+        (json['options'] as List<dynamic>).map((e) => e as String).toList(),
+    answerIndex: json['answerIndex'] as int? ?? -1,
+  );
+}
+
 class ProgramStep {
   final String title;
   final String body;
   final StepType type;
+  final StepQuestion? question;
 
   const ProgramStep({
     required this.title,
     required this.body,
     required this.type,
+    this.question,
   });
 
   factory ProgramStep.fromJson(Map<String, dynamic> json) => ProgramStep(
     title: json['title'] as String,
     body: json['body'] as String,
     type: stepTypeFromString(json['type'] as String? ?? 'text'),
+    question: json['question'] != null
+        ? StepQuestion.fromJson(json['question'] as Map<String, dynamic>)
+        : null,
   );
 }
 

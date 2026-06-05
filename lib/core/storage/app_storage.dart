@@ -125,5 +125,25 @@ class AppStorage {
   bool get darkMode => _box.get('darkMode') as bool? ?? false;
   Future<void> setDarkMode(bool v) => _box.put('darkMode', v);
 
+  // --- Onboarding ------------------------------------------------------------
+  /// Whether the first-launch questionnaire + personality recap has been done.
+  bool get onboardingComplete =>
+      _box.get('onboardingComplete') as bool? ?? false;
+  Future<void> setOnboardingComplete(bool v) =>
+      _box.put('onboardingComplete', v);
+
+  // --- Preferences (timer + newsletter rhythm) -------------------------------
+  /// Whether a countdown timer is shown on every chapter for a sense of pace.
+  bool get chapterTimerEnabled =>
+      _box.get('chapterTimer') as bool? ?? false;
+  Future<void> setChapterTimerEnabled(bool v) =>
+      _box.put('chapterTimer', v);
+
+  /// Personalised newsletter rhythm: 'daily', 'weekly' (default) or 'off'.
+  String get newsletterFrequency =>
+      _box.get('newsletterFreq') as String? ?? 'weekly';
+  Future<void> setNewsletterFrequency(String v) =>
+      _box.put('newsletterFreq', v);
+
   Future<void> wipe() => _box.clear();
 }

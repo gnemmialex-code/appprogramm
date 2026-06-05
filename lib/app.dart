@@ -56,7 +56,7 @@ class _LuminaAppState extends ConsumerState<LuminaApp>
       debugShowCheckedModeBanner: false,
       theme: AppTheme.themed,
       scrollBehavior: const AppScrollBehavior(),
-      routerConfig: appRouter,
+      routerConfig: ref.watch(goRouterProvider),
       builder: (context, child) =>
           PhoneFrame(child: child ?? const SizedBox.shrink()),
     );

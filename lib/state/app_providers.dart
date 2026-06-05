@@ -498,19 +498,83 @@ class UserProfileState {
   final String pseudo;
   final String email;
 
-  const UserProfileState({this.pseudo = '', this.email = ''});
+  // Collected during the first-launch onboarding questionnaire.
+  final String firstName;
+  final List<String> domainIds; // chosen learning domains (kDomains ids)
+  final bool wantsCustom; // also wants to create their own program
+  final List<String> subThemeIds; // optional, as composite "domainId::subId"
+  final int sessionsPerDay; // how many times per day the user wants to learn
+  final List<List<int>> schedule; // 7 days × N slots, minutes-of-day each
+  final String goal; // main motivation/objective
+  final String experience; // self-declared experience level
 
-  UserProfileState copyWith({String? pseudo, String? email}) =>
-      UserProfileState(
-        pseudo: pseudo ?? this.pseudo,
-        email: email ?? this.email,
-      );
+  const UserProfileState({
+    this.pseudo = '',
+    this.email = '',
+    this.firstName = '',
+    this.domainIds = const [],
+    this.wantsCustom = false,
+    this.subThemeIds = const [],
+    this.sessionsPerDay = 1,
+    this.schedule = const [],
+    this.goal = '',
+    this.experience = '',
+  });
 
-  Map<String, dynamic> toMap() => {'pseudo': pseudo, 'email': email};
+  UserProfileState copyWith({
+    String? pseudo,
+    String? email,
+    String? firstName,
+    List<String>? domainIds,
+    bool? wantsCustom,
+    List<String>? subThemeIds,
+    int? sessionsPerDay,
+    List<List<int>>? schedule,
+    String? goal,
+    String? experience,
+  }) => UserProfileState(
+    pseudo: pseudo ?? this.pseudo,
+    email: email ?? this.email,
+    firstName: firstName ?? this.firstName,
+    domainIds: domainIds ?? this.domainIds,
+    wantsCustom: wantsCustom ?? this.wantsCustom,
+    subThemeIds: subThemeIds ?? this.subThemeIds,
+    sessionsPerDay: sessionsPerDay ?? this.sessionsPerDay,
+    schedule: schedule ?? this.schedule,
+    goal: goal ?? this.goal,
+    experience: experience ?? this.experience,
+  );
+
+  Map<String, dynamic> toMap() => {
+    'pseudo': pseudo,
+    'email': email,
+    'firstName': firstName,
+    'domainIds': domainIds,
+    'wantsCustom': wantsCustom,
+    'subThemeIds': subThemeIds,
+    'sessionsPerDay': sessionsPerDay,
+    'schedule': schedule,
+    'goal': goal,
+    'experience': experience,
+  };
 
   factory UserProfileState.fromMap(Map<String, dynamic> m) => UserProfileState(
     pseudo: m['pseudo'] as String? ?? '',
     email: m['email'] as String? ?? '',
+    firstName: m['firstName'] as String? ?? '',
+    domainIds: (m['domainIds'] as List<dynamic>? ?? [])
+        .map((e) => e as String)
+        .toList(),
+    wantsCustom: m['wantsCustom'] as bool? ?? false,
+    subThemeIds: (m['subThemeIds'] as List<dynamic>? ?? [])
+        .map((e) => e as String)
+        .toList(),
+    sessionsPerDay: m['sessionsPerDay'] as int? ?? 1,
+    schedule: (m['schedule'] as List<dynamic>? ?? [])
+        .map((day) => (day as List<dynamic>).map((e) => e as int).toList())
+        .toList(),
+    goal: m['goal'] as String? ?? '',
+    experience: m['experience'] as String? ?? '',
   );
 }
 
@@ -519,8 +583,30 @@ class UserProfileController extends Notifier<UserProfileState> {
   UserProfileState build() =>
       UserProfileState.fromMap(ref.read(appStorageProvider).userProfile);
 
-  Future<void> update({String? pseudo, String? email}) async {
-    state = state.copyWith(pseudo: pseudo, email: email);
+  Future<void> update({
+    String? pseudo,
+    String? email,
+    String? firstName,
+    List<String>? domainIds,
+    bool? wantsCustom,
+    List<String>? subThemeIds,
+    int? sessionsPerDay,
+    List<List<int>>? schedule,
+    String? goal,
+    String? experience,
+  }) async {
+    state = state.copyWith(
+      pseudo: pseudo,
+      email: email,
+      firstName: firstName,
+      domainIds: domainIds,
+      wantsCustom: wantsCustom,
+      subThemeIds: subThemeIds,
+      sessionsPerDay: sessionsPerDay,
+      schedule: schedule,
+      goal: goal,
+      experience: experience,
+    );
     await ref.read(appStorageProvider).saveUserProfile(state.toMap());
   }
 }
@@ -528,6 +614,95 @@ class UserProfileController extends Notifier<UserProfileState> {
 final userProfileProvider =
     NotifierProvider<UserProfileController, UserProfileState>(
       UserProfileController.new,
+    );
+
+// ---------------------------------------------------------------------------
+// Onboarding — first-launch questionnaire gate
+// ---------------------------------------------------------------------------
+
+/// `true` once the user has finished the onboarding questionnaire and seen the
+/// personality recap. Drives the initial route / redirect guard.
+class OnboardingController extends Notifier<bool> {
+  @override
+  bool build() => ref.read(appStorageProvider).onboardingComplete;
+
+  Future<void> complete() async {
+    if (state) return;
+    state = true;
+    await ref.read(appStorageProvider).setOnboardingComplete(true);
+  }
+}
+
+final onboardingCompleteProvider =
+    NotifierProvider<OnboardingController, bool>(OnboardingController.new);
+
+// ---------------------------------------------------------------------------
+// App preferences — chapter timer + personalised newsletter rhythm
+// ---------------------------------------------------------------------------
+
+/// Newsletter cadence. `off` disables it entirely; `daily` is the maximum.
+enum NewsletterFrequency { off, daily, weekly }
+
+NewsletterFrequency newsletterFromKey(String k) => switch (k) {
+  'daily' => NewsletterFrequency.daily,
+  'off' => NewsletterFrequency.off,
+  _ => NewsletterFrequency.weekly,
+};
+
+String newsletterKey(NewsletterFrequency f) => switch (f) {
+  NewsletterFrequency.daily => 'daily',
+  NewsletterFrequency.off => 'off',
+  NewsletterFrequency.weekly => 'weekly',
+};
+
+String newsletterLabel(NewsletterFrequency f) => switch (f) {
+  NewsletterFrequency.daily => 'Quotidienne',
+  NewsletterFrequency.weekly => 'Hebdomadaire',
+  NewsletterFrequency.off => 'Désactivée',
+};
+
+class AppSettingsState {
+  final bool chapterTimer;
+  final NewsletterFrequency newsletter;
+
+  const AppSettingsState({
+    this.chapterTimer = false,
+    this.newsletter = NewsletterFrequency.weekly,
+  });
+
+  AppSettingsState copyWith({
+    bool? chapterTimer,
+    NewsletterFrequency? newsletter,
+  }) => AppSettingsState(
+    chapterTimer: chapterTimer ?? this.chapterTimer,
+    newsletter: newsletter ?? this.newsletter,
+  );
+}
+
+class AppSettingsController extends Notifier<AppSettingsState> {
+  @override
+  AppSettingsState build() {
+    final s = ref.read(appStorageProvider);
+    return AppSettingsState(
+      chapterTimer: s.chapterTimerEnabled,
+      newsletter: newsletterFromKey(s.newsletterFrequency),
+    );
+  }
+
+  Future<void> setChapterTimer(bool v) async {
+    state = state.copyWith(chapterTimer: v);
+    await ref.read(appStorageProvider).setChapterTimerEnabled(v);
+  }
+
+  Future<void> setNewsletter(NewsletterFrequency f) async {
+    state = state.copyWith(newsletter: f);
+    await ref.read(appStorageProvider).setNewsletterFrequency(newsletterKey(f));
+  }
+}
+
+final appSettingsProvider =
+    NotifierProvider<AppSettingsController, AppSettingsState>(
+      AppSettingsController.new,
     );
 
 // ---------------------------------------------------------------------------
@@ -596,6 +771,15 @@ class DailyAvailabilityController extends Notifier<DailyAvailabilityState> {
 
   Future<void> setDay(int dayIndex, int minutes) async {
     state = state.copyWithDay(dayIndex, minutes);
+    await ref
+        .read(appStorageProvider)
+        .saveAvailabilityPerDay(state.minutesPerDay);
+  }
+
+  /// Sets the same amount of minutes for every day of the week. Used by the
+  /// onboarding flow where the user gives a single "minutes per day" answer.
+  Future<void> setAll(int minutes) async {
+    state = DailyAvailabilityState(minutesPerDay: List<int>.filled(7, minutes));
     await ref
         .read(appStorageProvider)
         .saveAvailabilityPerDay(state.minutesPerDay);

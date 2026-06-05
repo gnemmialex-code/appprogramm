@@ -14,9 +14,10 @@ class ProfileScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final profile = ref.watch(userProfileProvider);
-    final displayName = profile.pseudo.isNotEmpty
-        ? profile.pseudo
-        : 'Mon profil';
+    final settings = ref.watch(appSettingsProvider);
+    final displayName = profile.firstName.isNotEmpty
+        ? profile.firstName
+        : (profile.pseudo.isNotEmpty ? profile.pseudo : 'Mon profil');
     final initial = displayName[0].toUpperCase();
 
     return Scaffold(
@@ -53,11 +54,24 @@ class ProfileScreen extends ConsumerWidget {
             children: [
               _EditTile(
                 icon: Icons.badge_rounded,
-                title: 'Pseudo',
-                value: profile.pseudo.isNotEmpty ? profile.pseudo : '—',
-                onTap: () => _editField(context, 'Pseudo', profile.pseudo, (v) {
-                  ref.read(userProfileProvider.notifier).update(pseudo: v);
-                }),
+                title: 'Prénom',
+                value: profile.firstName.isNotEmpty
+                    ? profile.firstName
+                    : (profile.pseudo.isNotEmpty ? profile.pseudo : '—'),
+                onTap: () => _editField(
+                  context,
+                  'Prénom',
+                  profile.firstName.isNotEmpty
+                      ? profile.firstName
+                      : profile.pseudo,
+                  (v) {
+                    // Keep firstName and the avatar pseudo in sync so the name
+                    // stays consistent everywhere it's used.
+                    ref
+                        .read(userProfileProvider.notifier)
+                        .update(firstName: v, pseudo: v);
+                  },
+                ),
               ),
               const _Divider(),
               _EditTile(
@@ -78,6 +92,50 @@ class ProfileScreen extends ConsumerWidget {
               _DarkModeTile(
                 isDark: ref.watch(darkModeProvider),
                 onChanged: (v) => ref.read(darkModeProvider.notifier).set(v),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          _SectionHeader('Apprentissage'),
+          const SizedBox(height: 8),
+          _SectionCard(
+            children: [
+              _SwitchTile(
+                icon: Icons.timer_rounded,
+                iconColor: AppColors.rose,
+                title: 'Minuteur de chapitre',
+                subtitle: settings.chapterTimer
+                    ? 'Un compte à rebours sur chaque chapitre'
+                    : 'Ajoute un peu de pression pour aller vite',
+                value: settings.chapterTimer,
+                onChanged: (v) =>
+                    ref.read(appSettingsProvider.notifier).setChapterTimer(v),
+              ),
+              const _Divider(),
+              _InfoTile(
+                icon: Icons.mark_email_unread_rounded,
+                iconColor: AppColors.sky,
+                title: 'Newsletter perso',
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      newsletterLabel(settings.newsletter),
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.inkSoft,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Icon(
+                      Icons.chevron_right_rounded,
+                      size: 18,
+                      color: AppColors.inkSoft,
+                    ),
+                  ],
+                ),
+                onTap: () => _pickNewsletter(context, ref, settings.newsletter),
               ),
             ],
           ),
@@ -392,6 +450,113 @@ class ProfileScreen extends ConsumerWidget {
     );
   }
 
+  void _pickNewsletter(
+    BuildContext ctx,
+    WidgetRef ref,
+    NewsletterFrequency current,
+  ) {
+    const options = [
+      (
+        freq: NewsletterFrequency.daily,
+        emoji: '☀️',
+        detail: 'Une dose chaque jour, selon tes thèmes',
+      ),
+      (
+        freq: NewsletterFrequency.weekly,
+        emoji: '🗓️',
+        detail: 'Un récap personnalisé chaque semaine',
+      ),
+      (
+        freq: NewsletterFrequency.off,
+        emoji: '🚫',
+        detail: 'Ne rien recevoir par e-mail',
+      ),
+    ];
+    showModalBottomSheet(
+      context: ctx,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetCtx) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(height: 14),
+          Container(
+            width: 36,
+            height: 4,
+            decoration: BoxDecoration(
+              color: AppColors.line,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 16),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 20),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Rythme de la newsletter',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          for (final o in options)
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () {
+                  ref.read(appSettingsProvider.notifier).setNewsletter(o.freq);
+                  Navigator.pop(sheetCtx);
+                },
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 13,
+                  ),
+                  child: Row(
+                    children: [
+                      Text(o.emoji, style: const TextStyle(fontSize: 22)),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              newsletterLabel(o.freq),
+                              style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            Text(
+                              o.detail,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: AppColors.inkSoft,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (current == o.freq)
+                        const Icon(
+                          Icons.check_rounded,
+                          color: AppColors.brandStart,
+                          size: 20,
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          const SizedBox(height: 16),
+        ],
+      ),
+    );
+  }
+
   void _showSnack(BuildContext ctx, String msg) {
     ScaffoldMessenger.of(ctx).showSnackBar(
       SnackBar(
@@ -615,6 +780,69 @@ class _DarkModeTile extends StatelessWidget {
               ),
               Switch(
                 value: isDark,
+                activeThumbColor: AppColors.brandStart,
+                activeTrackColor: AppColors.brandStart.withValues(alpha: 0.4),
+                onChanged: onChanged,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Generic settings row with a trailing switch.
+class _SwitchTile extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
+  final String title;
+  final String subtitle;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  const _SwitchTile({
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    required this.subtitle,
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => onChanged(!value),
+        borderRadius: BorderRadius.circular(18),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          child: Row(
+            children: [
+              Icon(icon, size: 22, color: iconColor),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    Text(
+                      subtitle,
+                      style: TextStyle(fontSize: 12, color: AppColors.inkSoft),
+                    ),
+                  ],
+                ),
+              ),
+              Switch(
+                value: value,
                 activeThumbColor: AppColors.brandStart,
                 activeTrackColor: AppColors.brandStart.withValues(alpha: 0.4),
                 onChanged: onChanged,

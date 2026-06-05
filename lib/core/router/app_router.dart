@@ -4,8 +4,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../features/custom_program/custom_program_screen.dart';
 import '../../features/domain_detail/domain_detail_screen.dart';
-import '../../features/domain_selection/domain_selection_screen.dart';
 import '../../features/expert/expert_generate_screen.dart';
+import '../../features/home/home_shell.dart';
 import '../../features/expert/expert_program_screen.dart';
 import '../../features/feed/feed_screen.dart';
 import '../../features/final_report/final_report_screen.dart';
@@ -13,21 +13,55 @@ import '../../features/flash/flash_screen.dart';
 import '../../features/generation/generation_screen.dart';
 import '../../features/module/module_screen.dart';
 import '../../features/notes/notes_screen.dart';
+import '../../features/onboarding/onboarding_screen.dart';
+import '../../features/onboarding/personality_screen.dart';
+import '../../features/onboarding/start_screen.dart';
 import '../../features/profile/profile_screen.dart';
 import '../../features/program/program_screen.dart';
 import '../../features/progress/progress_screen.dart';
 import '../../features/quiz/part_quiz_screen.dart';
 import '../../features/quiz/quiz_screen.dart';
 import '../../features/quiz/quiz_runner.dart';
+import '../../features/quiz/domain_quiz_screen.dart';
 import '../../features/quiz/retention_quiz_screen.dart';
 import '../../features/reminders/reminders_screen.dart';
 import '../../state/app_providers.dart';
 import '../../ui/theme/app_colors.dart';
 
-final GoRouter appRouter = GoRouter(
-  initialLocation: '/',
-  routes: [
-    GoRoute(path: '/', builder: (_, _) => const DomainSelectionScreen()),
+/// The app's router. Built as a provider so the redirect guard can read the
+/// onboarding-completion state and force first-launch users through the
+/// questionnaire before reaching any other screen.
+final goRouterProvider = Provider<GoRouter>((ref) {
+  final onboardingDone = ref.read(appStorageProvider).onboardingComplete;
+
+  return GoRouter(
+    initialLocation: onboardingDone ? '/' : '/onboarding',
+    redirect: (context, state) {
+      final done = ref.read(onboardingCompleteProvider);
+      final loc = state.matchedLocation;
+      final inOnboarding = loc == '/onboarding' || loc == '/personality';
+
+      // First launch: keep the user inside the onboarding flow.
+      if (!done && !inOnboarding) return '/onboarding';
+      // Already onboarded: don't let them fall back into the questionnaire.
+      if (done && loc == '/onboarding') return '/';
+      return null;
+    },
+    routes: [
+      GoRoute(
+        path: '/onboarding',
+        builder: (_, _) => const OnboardingScreen(),
+      ),
+      GoRoute(
+        path: '/personality',
+        pageBuilder: (context, state) =>
+            _fade(state, const PersonalityScreen()),
+      ),
+      GoRoute(
+        path: '/start',
+        pageBuilder: (context, state) => _fade(state, const StartScreen()),
+      ),
+      GoRoute(path: '/', builder: (_, _) => const HomeShell()),
     GoRoute(
       path: '/feed',
       pageBuilder: (context, state) => _fade(state, const FeedScreen()),
@@ -42,6 +76,13 @@ final GoRouter appRouter = GoRouter(
       pageBuilder: (context, state) => _fade(
         state,
         DomainDetailScreen(domainId: state.pathParameters['domainId']!),
+      ),
+    ),
+    GoRoute(
+      path: '/domain-quiz/:domainId',
+      pageBuilder: (context, state) => _fade(
+        state,
+        DomainQuizScreen(domainId: state.pathParameters['domainId']!),
       ),
     ),
 
@@ -144,7 +185,8 @@ final GoRouter appRouter = GoRouter(
       pageBuilder: (context, state) => _fade(state, const NotesScreen()),
     ),
   ],
-);
+  );
+});
 
 // ---------------------------------------------------------------------------
 // Expert route wrappers (need Riverpod ref to inject program)

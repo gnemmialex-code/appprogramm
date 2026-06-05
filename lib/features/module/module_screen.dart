@@ -1,15 +1,28 @@
+import 'dart:async';
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/adaptive/adaptive.dart';
+import '../../core/ai/generator.dart' show tierFromMinutes, tierMinutesPerChapter;
 import '../../core/models/content_models.dart';
 import '../../core/models/note_model.dart';
 import '../../state/app_providers.dart';
 import '../../ui/components/app_components.dart';
 import '../../ui/theme/app_colors.dart';
 import '../exercises/exercise_widgets.dart'
-    show ExerciseTile, StepInteractive, colorForStep, iconForStep, labelForStep;
+    show
+        ActionTimerWidget,
+        DarkStepInteractive,
+        ExerciseTile,
+        StepDemoWidget,
+        StepInteractive,
+        StepQuestionWidget,
+        colorForStep,
+        iconForStep,
+        labelForStep;
 import '../notes/note_widgets.dart';
 import '../quiz/quiz_runner.dart';
 
@@ -40,8 +53,33 @@ class _ModuleScreenState extends ConsumerState<ModuleScreen> {
   int _page = 0;
   final DateTime _openedAt = DateTime.now();
 
+  // Optional chapter timer (enabled in settings for a sense of urgency).
+  Timer? _timer;
+  bool _timerOn = false;
+  int _totalSeconds = 0;
+  int _remaining = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    // Start a countdown sized to the user's per-chapter pace, if enabled.
+    if (ref.read(appSettingsProvider).chapterTimer) {
+      final avg = ref.read(dailyAvailabilityProvider).averageActiveMinutes;
+      final minutes = tierMinutesPerChapter(tierFromMinutes(avg));
+      _timerOn = true;
+      _totalSeconds = minutes * 60;
+      _remaining = _totalSeconds;
+      _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (!mounted) return;
+        if (_remaining <= 0) return;
+        setState(() => _remaining--);
+      });
+    }
+  }
+
   @override
   void dispose() {
+    _timer?.cancel();
     _controller.dispose();
     super.dispose();
   }
@@ -95,25 +133,32 @@ class _ModuleScreenState extends ConsumerState<ModuleScreen> {
       isExpert: widget.isExpert,
     );
 
+    // Build pages with scroll-parallax wrappers.
+    // pi tracks each page's index so _PageParallax can compute its offset.
+    var pi = 0;
+    _PageParallax par(Widget w) =>
+        _PageParallax(controller: _controller, index: pi++, child: w);
+
     final pages = <Widget>[
-      _IntroCard(module: module, noteLocation: loc('intro')),
-      if (reinforce.isNotEmpty) _ReinforcementCard(topics: reinforce),
-      ...module.steps.map(
-        (s) => _StepCard(
+      par(_IntroCard(module: module)),
+      if (reinforce.isNotEmpty) par(_ReinforcementCard(topics: reinforce)),
+      ...module.steps.map((s) {
+        final idx = pi++;
+        return _StepCard(
           step: s,
           onValidate: _next,
-          noteLocation: loc('step', s.title),
-        ),
-      ),
-      _ExercisesCard(
+          pageController: _controller,
+          pageIndex: idx,
+        );
+      }),
+      par(_ExercisesCard(
         module: module,
         reinforcement: reinforcementExercises(reinforce),
         hasQuiz: hasQuiz,
         onNext: hasQuiz ? _next : () => _finish(module.id),
-        noteLocation: loc('exercises'),
-      ),
+      )),
       if (hasQuiz)
-        _QuizCard(
+        par(_QuizCard(
           module: module,
           onFinish: (score, total) {
             ref
@@ -121,8 +166,25 @@ class _ModuleScreenState extends ConsumerState<ModuleScreen> {
                 .recordModuleQuiz(module.id, score, total);
             _finish(module.id);
           },
-        ),
+        )),
     ];
+
+    // Note locations parallel to pages (null = page has no note support).
+    final noteLocations = <NoteLocation?>[
+      loc('intro'),
+      if (reinforce.isNotEmpty) null,
+      ...module.steps.map((s) => loc('step', s.title)),
+      loc('exercises'),
+      if (hasQuiz) null,
+    ];
+
+    // Resolve note state for the current page.
+    ref.watch(notesProvider);
+    final currentNoteLoc =
+        _page < noteLocations.length ? noteLocations[_page] : null;
+    final hasNote = currentNoteLoc != null &&
+        ref.read(notesProvider.notifier).noteForLocation(currentNoteLoc) !=
+            null;
 
     final pad = MediaQuery.of(context).padding;
 
@@ -139,7 +201,7 @@ class _ModuleScreenState extends ConsumerState<ModuleScreen> {
             itemBuilder: (_, i) => pages[i],
           ),
 
-          // Top overlay: close button + linear progress + counter.
+          // Top overlay: close · note · progress · counter.
           Positioned(
             top: pad.top + 6,
             left: 10,
@@ -150,7 +212,58 @@ class _ModuleScreenState extends ConsumerState<ModuleScreen> {
                   icon: Icons.close_rounded,
                   onTap: () => context.pop(),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 8),
+                // Note button — top-left, adapts to current page.
+                Tooltip(
+                  message: 'Note',
+                  preferBelow: true,
+                  child: GestureDetector(
+                    onTap: currentNoteLoc != null
+                        ? () => openNoteEditor(context, ref, currentNoteLoc)
+                        : null,
+                    child: Opacity(
+                      opacity: currentNoteLoc != null ? 1.0 : 0.25,
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          Container(
+                            width: 38,
+                            height: 38,
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.20),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              hasNote
+                                  ? Icons.sticky_note_2_rounded
+                                  : Icons.edit_note_rounded,
+                              color: Colors.white,
+                              size: 20,
+                            ),
+                          ),
+                          if (hasNote)
+                            Positioned(
+                              right: 1,
+                              top: 1,
+                              child: Container(
+                                width: 9,
+                                height: 9,
+                                decoration: BoxDecoration(
+                                  color: AppColors.brandStart,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: Colors.white,
+                                    width: 1.5,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
                 Expanded(
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(8),
@@ -172,6 +285,10 @@ class _ModuleScreenState extends ConsumerState<ModuleScreen> {
                     fontSize: 12,
                   ),
                 ),
+                if (_timerOn) ...[
+                  const SizedBox(width: 10),
+                  _TimerPill(remaining: _remaining, total: _totalSeconds),
+                ],
               ],
             ),
           ),
@@ -239,6 +356,88 @@ class _CircleButton extends StatelessWidget {
         ),
         child: Icon(icon, color: Colors.white, size: 22),
       ),
+    );
+  }
+}
+
+/// Countdown chip shown at the top when the chapter timer is enabled. Goes
+/// from calm → warning → urgent (pulsing) as time runs out, then "Temps écoulé".
+class _TimerPill extends StatefulWidget {
+  final int remaining;
+  final int total;
+  const _TimerPill({required this.remaining, required this.total});
+
+  @override
+  State<_TimerPill> createState() => _TimerPillState();
+}
+
+class _TimerPillState extends State<_TimerPill>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulse = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 700),
+  )..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  String _fmt(int s) {
+    final m = (s ~/ 60).toString();
+    final sec = (s % 60).toString().padLeft(2, '0');
+    return '$m:$sec';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final elapsed = widget.remaining <= 0;
+    final frac = widget.total == 0 ? 0.0 : widget.remaining / widget.total;
+    final urgent = elapsed || frac <= 0.2;
+
+    final color = elapsed
+        ? AppColors.danger
+        : frac <= 0.2
+        ? AppColors.danger
+        : frac <= 0.5
+        ? AppColors.sun
+        : AppColors.brandStart;
+
+    final pill = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.18),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.5)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            elapsed ? Icons.timer_off_rounded : Icons.timer_rounded,
+            size: 14,
+            color: color,
+          ),
+          const SizedBox(width: 5),
+          Text(
+            elapsed ? 'Temps écoulé' : _fmt(widget.remaining),
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (!urgent) return pill;
+    return AnimatedBuilder(
+      animation: _pulse,
+      builder: (_, child) =>
+          Transform.scale(scale: 1 + 0.06 * _pulse.value, child: child),
+      child: pill,
     );
   }
 }
@@ -341,6 +540,84 @@ class _WhiteButton extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
+// Scroll-parallax wrapper — wraps light cards (intro, exercises, quiz…).
+// Content slides + fades in sync with the PageController scroll position.
+// _StepCard handles its own internal parallax so it is NOT wrapped here.
+// ---------------------------------------------------------------------------
+
+class _PageParallax extends StatelessWidget {
+  final Widget child;
+  final PageController controller;
+  final int index;
+  const _PageParallax({
+    required this.child,
+    required this.controller,
+    required this.index,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (_, inner) {
+        double off = 0;
+        if (controller.hasClients && controller.position.haveDimensions) {
+          off = (controller.page! - index).clamp(-1.0, 1.0);
+        }
+        return Transform.translate(
+          offset: Offset(0, off * 72),
+          child: Opacity(
+            opacity: (1.0 - off.abs() * 0.60).clamp(0.18, 1.0),
+            child: inner,
+          ),
+        );
+      },
+      child: child,
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Animated blob overlay for immersive step cards
+// ---------------------------------------------------------------------------
+
+class _BlobPainter extends CustomPainter {
+  final double t;
+  const _BlobPainter({required this.t});
+
+  // (relX, relY, radius, phase, ampX, ampY)
+  static const _specs = [
+    (0.14, 0.22, 88.0, 0.00, 24.0, 30.0),
+    (0.82, 0.12, 62.0, 0.33, 28.0, 18.0),
+    (0.07, 0.74, 54.0, 0.60, 16.0, 26.0),
+    (0.78, 0.80, 78.0, 0.15, 32.0, 16.0),
+    (0.48, 0.44, 40.0, 0.80, 12.0, 22.0),
+    (0.30, 0.88, 66.0, 0.45, 20.0, 14.0),
+  ];
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    for (final (rx, ry, radius, phase, ampX, ampY) in _specs) {
+      final angle = (t + phase) * 2 * math.pi;
+      final x = rx * size.width + math.cos(angle) * ampX;
+      final y = ry * size.height + math.sin(angle * 0.73) * ampY;
+      final alpha =
+          0.07 + 0.06 * math.sin((t * 1.5 + phase) * 2 * math.pi);
+      canvas.drawCircle(
+        Offset(x, y),
+        radius,
+        Paint()
+          ..color = Colors.white.withValues(alpha: alpha)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 26),
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_BlobPainter o) => o.t != t;
+}
+
+// ---------------------------------------------------------------------------
 // Cards
 // ---------------------------------------------------------------------------
 
@@ -365,8 +642,7 @@ class _SheetCard extends StatelessWidget {
 
 class _IntroCard extends StatelessWidget {
   final Module module;
-  final NoteLocation noteLocation;
-  const _IntroCard({required this.module, required this.noteLocation});
+  const _IntroCard({required this.module});
 
   @override
   Widget build(BuildContext context) {
@@ -397,8 +673,6 @@ class _IntroCard extends StatelessWidget {
               style: const TextStyle(fontSize: 16, height: 1.5),
             ),
           ),
-          const SizedBox(height: 16),
-          NoteButton(location: noteLocation),
           const SizedBox(height: 16),
           Row(
             children: [
@@ -506,107 +780,227 @@ class _ReinforcementCard extends StatelessWidget {
   }
 }
 
-/// Immersive, full-bleed learning step (the TikTok-style cards).
-class _StepCard extends StatelessWidget {
+/// Immersive animated step card with scroll-parallax content.
+/// Background (gradient + blobs) stays fixed while the content slides
+/// in sync with the PageController, creating a depth effect.
+class _StepCard extends StatefulWidget {
   final ProgramStep step;
   final VoidCallback onValidate;
-  final NoteLocation noteLocation;
+  final PageController pageController;
+  final int pageIndex;
   const _StepCard({
     required this.step,
     required this.onValidate,
-    required this.noteLocation,
+    required this.pageController,
+    required this.pageIndex,
   });
 
   @override
-  Widget build(BuildContext context) {
-    final color = colorForStep(step.type);
-    final deep = Color.lerp(color, Colors.black, 0.55)!;
-    final pad = MediaQuery.of(context).padding;
-    final label = labelForStep(step.type);
+  State<_StepCard> createState() => _StepCardState();
+}
 
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [color, deep],
-        ),
-      ),
-      child: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(22, 56, 22, pad.bottom + 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.22),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
+class _StepCardState extends State<_StepCard> with TickerProviderStateMixin {
+  late final AnimationController _grad = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 7),
+  )..repeat(reverse: true);
+
+  late final AnimationController _blobs = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 11),
+  )..repeat();
+
+  bool _actionDone = false;
+
+  bool get _canValidate =>
+      widget.step.type != StepType.action || _actionDone;
+
+  @override
+  void dispose() {
+    _grad.dispose();
+    _blobs.dispose();
+    super.dispose();
+  }
+
+  /// Page offset: 0 = this card is centred, ±1 = one page away.
+  double get _pageOff {
+    final ctrl = widget.pageController;
+    if (!ctrl.hasClients || !ctrl.position.haveDimensions) return 0;
+    return (ctrl.page! - widget.pageIndex).clamp(-1.0, 1.0);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = colorForStep(widget.step.type);
+    final deep = Color.lerp(color, Colors.black, 0.58)!;
+    final pad = MediaQuery.of(context).padding;
+    final isAction = widget.step.type == StepType.action;
+
+    // Merge all three animation sources so a single builder handles them all.
+    return AnimatedBuilder(
+      animation: Listenable.merge([_grad, _blobs, widget.pageController]),
+      builder: (ctx, _) {
+        final g = _grad.value;
+        final off = _pageOff;
+
+        final topColor = Color.lerp(
+          color,
+          HSLColor.fromColor(color)
+              .withLightness(
+                (HSLColor.fromColor(color).lightness + 0.10 * g)
+                    .clamp(0.0, 1.0),
+              )
+              .toColor(),
+          0.5,
+        )!;
+
+        // ── Background: NO transform — stays fixed during swipe ──
+        return Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment(-1.0 + 0.5 * g, -1.0 + 0.3 * g),
+              end: Alignment(1.0 - 0.2 * g, 1.0 - 0.4 * g),
+              colors: [topColor, deep],
+            ),
+          ),
+          child: CustomPaint(
+            painter: _BlobPainter(t: _blobs.value),
+            // ── Content: parallax-shifted with the swipe ──
+            child: SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(22, 58, 22, pad.bottom + 14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(iconForStep(step.type), size: 16, color: Colors.white),
-                    const SizedBox(width: 6),
-                    Text(
-                      label,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 12,
+                    // Badge slides slightly (less than body)
+                    Transform.translate(
+                      offset: Offset(0, off * 45),
+                      child: Opacity(
+                        opacity: (1 - off.abs() * 0.9).clamp(0.0, 1.0),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.22),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                iconForStep(widget.step.type),
+                                size: 15,
+                                color: Colors.white,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                labelForStep(widget.step.type),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    // Main scrollable content — full parallax
+                    Expanded(
+                      child: Transform.translate(
+                        offset: Offset(0, off * 88),
+                        child: Opacity(
+                          opacity: (1 - off.abs() * 0.88).clamp(0.0, 1.0),
+                          child: SingleChildScrollView(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const SizedBox(height: 14),
+                                if (!isAction) ...[
+                                  StepDemoWidget(type: widget.step.type),
+                                  const SizedBox(height: 14),
+                                ],
+                                Text(
+                                  widget.step.title,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 28,
+                                    fontWeight: FontWeight.w800,
+                                    height: 1.1,
+                                  ),
+                                ),
+                                const SizedBox(height: 11),
+                                Text(
+                                  widget.step.body,
+                                  style: TextStyle(
+                                    color:
+                                        Colors.white.withValues(alpha: 0.93),
+                                    fontSize: 19,
+                                    height: 1.5,
+                                  ),
+                                ),
+                                if (widget.step.question != null) ...[
+                                  const SizedBox(height: 20),
+                                  StepQuestionWidget(
+                                    question: widget.step.question!,
+                                  ),
+                                ],
+                                const SizedBox(height: 20),
+                                if (isAction)
+                                  ActionTimerWidget(
+                                    onComplete: () {
+                                      if (mounted) {
+                                        setState(() => _actionDone = true);
+                                      }
+                                    },
+                                  )
+                                else
+                                  DarkStepInteractive(
+                                    type: widget.step.type,
+                                  ),
+                                const SizedBox(height: 8),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 10),
+
+                    // Button — small parallax so it stays reachable
+                    Transform.translate(
+                      offset: Offset(0, off * 35),
+                      child: AnimatedOpacity(
+                        opacity: _canValidate ? 1.0 : 0.38,
+                        duration: const Duration(milliseconds: 400),
+                        child: IgnorePointer(
+                          ignoring: !_canValidate,
+                          child: _WhiteButton(
+                            label: _canValidate
+                                ? 'Valider'
+                                : 'En attente du timer…',
+                            icon: _canValidate
+                                ? Icons.check_rounded
+                                : Icons.timer_rounded,
+                            textColor: Color.lerp(color, Colors.black, 0.58)!,
+                            onPressed: widget.onValidate,
+                          ),
+                        ),
                       ),
                     ),
                   ],
                 ),
               ),
-              Expanded(
-                child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const SizedBox(height: 18),
-                      Text(
-                        step.title,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 28,
-                          fontWeight: FontWeight.w800,
-                          height: 1.1,
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      Text(
-                        step.body,
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.95),
-                          fontSize: 17,
-                          height: 1.5,
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      StepInteractive(type: step.type),
-                      const SizedBox(height: 16),
-                      NoteButton(location: noteLocation, onDark: true),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              _WhiteButton(
-                label: 'Valider',
-                icon: Icons.check_rounded,
-                textColor: deep,
-                onPressed: onValidate,
-              ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
@@ -617,13 +1011,11 @@ class _ExercisesCard extends StatelessWidget {
   final List<Exercise> reinforcement;
   final bool hasQuiz;
   final VoidCallback onNext;
-  final NoteLocation noteLocation;
   const _ExercisesCard({
     required this.module,
     this.reinforcement = const [],
     required this.hasQuiz,
     required this.onNext,
-    required this.noteLocation,
   });
 
   @override
@@ -674,8 +1066,6 @@ class _ExercisesCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 4),
-          NoteButton(location: noteLocation),
-          const SizedBox(height: 12),
           GradientButton(
             label: hasQuiz ? 'Passer au quiz' : 'Terminer le module',
             icon: hasQuiz ? Icons.quiz_rounded : Icons.flag_rounded,

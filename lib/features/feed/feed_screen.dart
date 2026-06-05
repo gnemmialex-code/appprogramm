@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -12,7 +13,8 @@ import 'knowledge_feed.dart';
 ///  • « Tout » — a bit of everything, all domains mixed.
 ///  • « Thématique » — only the themes the user wants to learn.
 class FeedScreen extends ConsumerStatefulWidget {
-  const FeedScreen({super.key});
+  final bool showClose;
+  const FeedScreen({super.key, this.showClose = true});
 
   @override
   ConsumerState<FeedScreen> createState() => _FeedScreenState();
@@ -38,7 +40,6 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
     super.didChangeDependencies();
     if (_initialised) return;
     _initialised = true;
-    // Seed the themed feed with the current program's domain, if any.
     final program = ref.read(programControllerProvider);
     String? match;
     if (program != null) {
@@ -55,8 +56,6 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
 
   List<FeedCard> get _cards => _tab == 0 ? allFeed() : themedFeed(_interests);
 
-  /// Jumps the (single, shared) controller back to the first card. Used when
-  /// the feed content changes so the user starts at the top of the new list.
   void _resetToTop() {
     if (_pageController.hasClients) _pageController.jumpToPage(0);
   }
@@ -119,8 +118,6 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
                         : _saved.add(key),
                   ),
                 );
-                // Depth effect: the off-screen card shrinks & fades, then
-                // settles to full size as it snaps into place — synced to swipe.
                 return AnimatedBuilder(
                   animation: _pageController,
                   builder: (context, child) {
@@ -152,13 +149,16 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
               children: [
                 Row(
                   children: [
-                    IconButton(
-                      icon: const Icon(
-                        Icons.close_rounded,
-                        color: Colors.white,
-                      ),
-                      onPressed: () => context.pop(),
-                    ),
+                    if (widget.showClose)
+                      IconButton(
+                        icon: const Icon(
+                          Icons.close_rounded,
+                          color: Colors.white,
+                        ),
+                        onPressed: () => context.pop(),
+                      )
+                    else
+                      const SizedBox(width: 48),
                     const Spacer(),
                     _Segmented(tab: _tab, onChanged: _switchTab),
                     const Spacer(),
@@ -272,7 +272,9 @@ class _InterestChip extends StatelessWidget {
   }
 }
 
-class _FeedCardView extends StatelessWidget {
+// ─── Feed card (animated background) ────────────────────────────────────────
+
+class _FeedCardView extends StatefulWidget {
   final FeedCard card;
   final int index;
   final int total;
@@ -294,58 +296,98 @@ class _FeedCardView extends StatelessWidget {
   });
 
   @override
+  State<_FeedCardView> createState() => _FeedCardViewState();
+}
+
+class _FeedCardViewState extends State<_FeedCardView>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _bgCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _bgCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 10),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _bgCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final deep = Color.lerp(card.color, Colors.black, 0.6)!;
+    final base = widget.card.color;
+    final hsl = HSLColor.fromColor(base);
+
+    // Boost saturation and lightness for vivid colours.
+    final vivid = hsl
+        .withSaturation((hsl.saturation * 1.35).clamp(0.0, 1.0))
+        .withLightness((hsl.lightness + 0.07).clamp(0.28, 0.65))
+        .toColor();
+    final dark = Color.lerp(vivid, Colors.black, 0.38)!;
+    final light = hsl
+        .withLightness((hsl.lightness + 0.32).clamp(0.45, 0.92))
+        .toColor();
+
     final pad = MediaQuery.of(context).padding;
 
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [card.color, deep],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [vivid, dark],
         ),
       ),
       child: Stack(
         children: [
-          // Big faint background icon.
-          Positioned(
-            right: -30,
-            top: pad.top + 80,
-            child: Icon(
-              card.icon,
-              size: 220,
-              color: Colors.white.withValues(alpha: 0.08),
+          // ── Animated orb layer ──────────────────────────────────────────
+          Positioned.fill(
+            child: AnimatedBuilder(
+              animation: _bgCtrl,
+              builder: (_, __) => CustomPaint(
+                painter: _OrbsPainter(
+                  t: _bgCtrl.value,
+                  baseColor: vivid,
+                  lightColor: light,
+                ),
+              ),
             ),
           ),
-          // Card text content.
+
+          // ── Text content – centré ───────────────────────────────────────
           Padding(
-            padding: EdgeInsets.fromLTRB(
-              24,
-              pad.top + 120,
-              96,
-              pad.bottom + 40,
+            padding: EdgeInsets.only(
+              left: 28,
+              right: 28,
+              top: pad.top + 80,
+              bottom: pad.bottom + 40,
             ),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.end,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
+                // Domain chip
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 12,
                     vertical: 6,
                   ),
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.22),
+                    color: Colors.white.withValues(alpha: 0.25),
                     borderRadius: BorderRadius.circular(14),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(card.icon, size: 16, color: Colors.white),
+                      Icon(widget.card.icon, size: 16, color: Colors.white),
                       const SizedBox(width: 6),
                       Text(
-                        card.domainLabel,
+                        widget.card.domainLabel,
                         style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.w700,
@@ -355,28 +397,34 @@ class _FeedCardView extends StatelessWidget {
                     ],
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 22),
+                // Title
                 Text(
-                  card.title,
+                  widget.card.title,
+                  textAlign: TextAlign.center,
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 30,
+                    fontSize: 32,
                     fontWeight: FontWeight.w800,
-                    height: 1.1,
+                    height: 1.15,
+                    shadows: [Shadow(blurRadius: 24, color: Colors.black38)],
                   ),
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 18),
+                // Description
                 Text(
-                  card.body,
+                  widget.card.body,
+                  textAlign: TextAlign.center,
                   style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.92),
+                    color: Colors.white.withValues(alpha: 0.93),
                     fontSize: 17,
-                    height: 1.45,
+                    height: 1.5,
                   ),
                 ),
-                const SizedBox(height: 22),
-                if (showHint)
+                if (widget.showHint) ...[
+                  const SizedBox(height: 26),
                   Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       const Icon(
                         Icons.keyboard_arrow_up_rounded,
@@ -392,33 +440,35 @@ class _FeedCardView extends StatelessWidget {
                       ),
                     ],
                   ),
+                ],
               ],
             ),
           ),
-          // Right-side action column (TikTok-style).
+
+          // ── Right-side action column (TikTok-style) ─────────────────────
           Positioned(
             right: 14,
             bottom: pad.bottom + 60,
             child: Column(
               children: [
                 _Action(
-                  icon: liked
+                  icon: widget.liked
                       ? Icons.favorite_rounded
                       : Icons.favorite_border_rounded,
-                  active: liked,
-                  onTap: onLike,
+                  active: widget.liked,
+                  onTap: widget.onLike,
                 ),
                 const SizedBox(height: 18),
                 _Action(
-                  icon: saved
+                  icon: widget.saved
                       ? Icons.bookmark_rounded
                       : Icons.bookmark_border_rounded,
-                  active: saved,
-                  onTap: onSave,
+                  active: widget.saved,
+                  onTap: widget.onSave,
                 ),
                 const SizedBox(height: 22),
                 Text(
-                  '${index + 1}/$total',
+                  '${widget.index + 1}/${widget.total}',
                   style: const TextStyle(
                     color: Colors.white70,
                     fontSize: 12,
@@ -433,6 +483,78 @@ class _FeedCardView extends StatelessWidget {
     );
   }
 }
+
+// ─── Animated orbs painter ───────────────────────────────────────────────────
+
+class _OrbsPainter extends CustomPainter {
+  final double t;
+  final Color baseColor;
+  final Color lightColor;
+
+  _OrbsPainter({
+    required this.t,
+    required this.baseColor,
+    required this.lightColor,
+  });
+
+  void _orb(Canvas canvas, Size size, double fx, double fy, double fr,
+      double opacity, Color c) {
+    final cx = fx * size.width;
+    final cy = fy * size.height;
+    final r = fr * size.shortestSide;
+    final paint = Paint()
+      ..shader = RadialGradient(
+        colors: [c.withValues(alpha: opacity), c.withValues(alpha: 0.0)],
+      ).createShader(Rect.fromCircle(center: Offset(cx, cy), radius: r));
+    canvas.drawCircle(Offset(cx, cy), r, paint);
+  }
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final p = math.pi * 2;
+
+    // Orb 1 – large, top-left, slow drift
+    _orb(
+      canvas, size,
+      0.22 + 0.20 * math.sin(t * p),
+      0.18 + 0.13 * math.cos(t * p * 0.7),
+      0.55, 0.30, Colors.white,
+    );
+    // Orb 2 – large, right, complementary colour
+    _orb(
+      canvas, size,
+      0.80 + 0.16 * math.cos(t * p * 1.1 + 1.0),
+      0.32 + 0.22 * math.sin(t * p * 0.8 + 0.5),
+      0.48, 0.28, lightColor,
+    );
+    // Orb 3 – large, bottom-centre
+    _orb(
+      canvas, size,
+      0.50 + 0.24 * math.sin(t * p * 0.85 + 2.0),
+      0.78 + 0.10 * math.cos(t * p * 1.2),
+      0.55, 0.22, Colors.white,
+    );
+    // Orb 4 – medium, roaming centre
+    _orb(
+      canvas, size,
+      0.60 + 0.30 * math.cos(t * p * 1.5 + 1.2),
+      0.50 + 0.32 * math.sin(t * p * 1.3 + 0.8),
+      0.32, 0.26, lightColor,
+    );
+    // Orb 5 – medium, left
+    _orb(
+      canvas, size,
+      0.10 + 0.13 * math.sin(t * p * 0.6 + 3.0),
+      0.62 + 0.18 * math.cos(t * p * 0.75 + 1.5),
+      0.38, 0.24, Colors.white,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_OrbsPainter old) => old.t != t;
+}
+
+// ─── Action button ────────────────────────────────────────────────────────────
 
 class _Action extends StatelessWidget {
   final IconData icon;

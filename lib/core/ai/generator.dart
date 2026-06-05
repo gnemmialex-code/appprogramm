@@ -32,15 +32,15 @@ int tierMinutesPerChapter(ProgramTier t) => switch (t) {
   ProgramTier.intensif => 40,
 };
 
-// Step indices included per tier (out of the 8 available).
-// 0=Intro, 1=Fait, 2=Réflexion, 3=Action, 4=Approfondissement,
-// 5=Astuce, 6=Défi, 7=Ancrage
+// Step indices per tier (12 steps total: 0-11).
+// 0=Essentiel, 1=Fait, 2=Ce que ça change, 3=Et toi, 4=Action(timer),
+// 5=Astuce, 6=Défi, 7=Un cran+, 8=Ancrage, 9=Point clé, 10=Schéma, 11=+loin
 const Map<ProgramTier, List<int>> _kStepIndices = {
-  ProgramTier.express: [0, 3, 7],
-  ProgramTier.rapide: [0, 1, 3, 5, 7],
-  ProgramTier.standard: [0, 1, 2, 3, 4, 5, 7],
-  ProgramTier.complet: [0, 1, 2, 3, 4, 5, 6, 7],
-  ProgramTier.intensif: [0, 1, 2, 3, 4, 5, 6, 7],
+  ProgramTier.express: [0, 4, 9],
+  ProgramTier.rapide: [0, 1, 4, 5, 9],
+  ProgramTier.standard: [0, 1, 2, 3, 4, 5, 6, 9],
+  ProgramTier.complet: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+  ProgramTier.intensif: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
 };
 
 // Number of exercises included per tier (out of 6 available).
@@ -445,11 +445,24 @@ String _c11(String d, _Flavor f) =>
 // Module builder — 8 steps + 6 exercises for EVERY chapter
 // ---------------------------------------------------------------------------
 
-Map<String, dynamic> _step(String title, String body, String type) => {
-  'title': title,
-  'body': body,
-  'type': type,
-};
+Map<String, dynamic> _step(
+  String title,
+  String body,
+  String type, {
+  String? qText,
+  List<String>? qOptions,
+  int qAnswer = -1,
+}) {
+  final m = <String, dynamic>{'title': title, 'body': body, 'type': type};
+  if (qText != null && qOptions != null) {
+    m['question'] = {
+      'question': qText,
+      'options': qOptions,
+      'answerIndex': qAnswer,
+    };
+  }
+  return m;
+}
 
 Map<String, dynamic> _exercise(String title, String instruction, String type) =>
     {'title': title, 'instruction': instruction, 'type': type};
@@ -464,84 +477,105 @@ Map<String, dynamic> _buildModule(
   final ch = _chapters[i];
   final intensity = _levelMeta[level - 1].$4;
 
-  // 8 steps, all always present, 6 distinct types for maximum visual variety.
+  // 12 steps — 1 sentence each + inline quickQuestion.
   final steps = <Map<String, dynamic>>[
-    // 1 — text · Introduction
+    // 0 — text · Accroche
     _step(
-      'Introduction',
-      'Bienvenue dans « ${ch.title} ». Ce chapitre aborde l\'un des piliers '
-          'essentiels de $d. Lis chaque ligne avec intention : '
-          'une phrase bien ancrée vaut mieux que dix survolées. '
-          'Note mentalement ce qui résonne avec ta situation actuelle.',
+      'L\'essentiel',
+      '« ${ch.title} » dans $d : une idée simple qui change tout.',
       'text',
+      qText: 'Tu connais déjà ce sujet ?',
+      qOptions: ['Un peu', 'Pas du tout'],
     ),
-    // 2 — fact · Insight surprenant
+    // 1 — fact · Fait surprenant
     _step(
       'Le savais-tu ?',
-      'Les personnes qui appliquent consciemment « ${ch.title} » dans $d '
-          'rapportent des progrès visibles en moins de 3 semaines. '
-          'Pourquoi ? Parce que cette étape active la plasticité cérébrale : '
-          'ton cerveau crée littéralement de nouvelles connexions à chaque '
-          'répétition. Ce n\'est pas de la motivation — c\'est de la biologie.',
+      'Les pratiquants de « ${ch.title} » progressent 3× plus vite grâce à la plasticité cérébrale.',
       'fact',
+      qText: 'Ce fait te surprend ?',
+      qOptions: ['Oui, vraiment !', 'Je le savais déjà'],
     ),
-    // 3 — reflection · Question profonde
+    // 2 — text · Ce que ça change
     _step(
-      'Réflexion guidée',
-      'Prends 3 minutes, pose ton téléphone, et réponds honnêtement : '
-          'Comment est-ce que « ${ch.title} » se manifeste (ou manque) '
-          'dans ta pratique de $d aujourd\'hui ? '
-          'Quelle est la toute première chose qui te vient ? '
-          'Écris-la sans la censurer — c\'est souvent la plus vraie.',
-      'reflection',
+      'Ce que ça change',
+      'Sans « ${ch.title} », on reste bloqué au même niveau indéfiniment dans $d.',
+      'text',
+      qText: 'Tu as déjà ressenti ce blocage ?',
+      qOptions: ['Oui, plusieurs fois', 'Pas vraiment'],
     ),
-    // 4 — action · Mini-action immédiate
+    // 3 — reflection · Introspection
+    _step(
+      'Et toi ?',
+      'Comment « ${ch.title} » se manifeste dans ta pratique de $d aujourd\'hui ?',
+      'reflection',
+      qText: 'As-tu réfléchi à ça récemment ?',
+      qOptions: ['Oui, souvent', 'Rarement'],
+    ),
+    // 4 — action · Mini-action (TIMER AUTO)
     _step(
       'Mini-action maintenant',
-      'Stop. Avant de lire la suite, réalise ça : ${f.practice}. '
-          'Deux minutes maximum. L\'action crée l\'ancrage — la théorie seule '
-          's\'oublie. Reviens ici quand c\'est fait. '
-          '(Vraiment. Fais-le maintenant.)',
+      'Lance le timer et fais-le : ${f.practice}.',
       'action',
+      qText: 'Tu es prêt ?',
+      qOptions: ['À fond ! 🔥', 'J\'y vais doucement'],
     ),
-    // 5 — text · Approfondissement
+    // 5 — tip · Astuce de pro
     _step(
-      'On va plus loin',
-      '« ${ch.title} » dans $d, c\'est plus subtil qu\'il n\'y paraît. '
-          'La plupart des gens s\'arrêtent à la surface : ils comprennent le '
-          'concept mais ne voient pas comment l\'adapter à leur contexte. '
-          'La clé : ne pas copier une méthode, mais en extraire le principe '
-          'et le réinventer selon ton vécu. C\'est là que la maîtrise commence.',
-      'text',
-    ),
-    // 6 — tip · Astuce pro
-    _step(
-      'Astuce pro',
-      'Pour booster l\'impact de « ${ch.title} » dans $d : '
-          'combine-le avec une habitude déjà existante. '
-          'Par exemple, lie ${f.practice} à quelque chose que tu fais déjà '
-          'chaque jour (café du matin, trajet, repas). '
-          'Ton cerveau associe automatiquement les deux — '
-          'et la nouvelle habitude s\'installe 3× plus vite.',
+      'Astuce de pro',
+      'Associe ${f.practice} à quelque chose que tu fais déjà — les connexions s\'ancrent 3× plus vite.',
       'tip',
+      qText: 'Tu as déjà une habitude à laquelle l\'associer ?',
+      qOptions: ['Oui, j\'en ai une', 'Je vais en trouver une'],
     ),
-    // 7 — challenge · Défi du chapitre
+    // 6 — challenge · Défi 24h
     _step(
       'Défi du chapitre',
-      'Ton défi pour les 24 prochaines heures : applique « ${ch.title} » '
-          'dans $d dans une situation légèrement inconfortable. '
-          'Pas idéale, pas parfaite — juste réelle. '
-          'Vise ${f.win}. Puis reviens noter en un mot comment ça s\'est passé.',
+      'Dans les 24h, applique « ${ch.title} » dans une vraie situation et vise ${f.win}.',
       'challenge',
+      qText: 'Quand tu relèves ce défi ?',
+      qOptions: ['Aujourd\'hui même', 'Dans les 48h'],
+    ),
+    // 7 — text · Niveau supérieur
+    _step(
+      'Un cran plus loin',
+      'Ne copie pas la méthode — extrais le principe et adapte-le à TON vécu de $d.',
+      'text',
+      qText: 'Qu\'est-ce qui prime ?',
+      qOptions: ['Comprendre le principe', 'L\'adapter à soi'],
+      qAnswer: 1,
     ),
     // 8 — reflection · Ancrage identitaire
     _step(
-      'Ancrage final',
-      'Complète cette phrase à voix haute ou par écrit : '
-          '« Je suis quelqu\'un qui [action liée à « ${ch.title} »] dans $d. » '
-          'Les habitudes identitaires sont les plus solides : '
-          'quand tu te définis par ce que tu fais, tu le fais même sans motivation.',
+      'Qui es-tu ?',
+      'Dis à voix haute : « Je suis quelqu\'un qui pratique « ${ch.title} » dans $d. »',
       'reflection',
+      qText: 'Comment ancrer durablement ?',
+      qOptions: ['En le reliant à son identité', 'En comptant sur la volonté'],
+      qAnswer: 0,
+    ),
+    // 9 — text · Point clé
+    _step(
+      'Le point clé',
+      'Une seule chose : ${f.win} — tous les jours, peu importe les conditions.',
+      'text',
+      qText: 'Ce point clé te parle ?',
+      qOptions: ['Oui, c\'est limpide', 'J\'y réfléchis encore'],
+    ),
+    // 10 — framework · Schéma mental
+    _step(
+      'Le schéma',
+      'Visualise : input → ${f.practice} → ${f.win}. Répète. C\'est le cycle.',
+      'framework',
+      qText: 'Tu vois le schéma mentalement ?',
+      qOptions: ['Oui, clairement', 'Pas encore'],
+    ),
+    // 11 — research · Pour aller plus loin
+    _step(
+      'Pour aller plus loin',
+      'Qui autour de toi incarne « ${ch.title} » dans $d — et qu\'est-ce qui t\'inspire ?',
+      'research',
+      qText: 'Tu as un modèle en tête ?',
+      qOptions: ['Oui, je vois qui', 'Je vais chercher'],
     ),
   ];
 
