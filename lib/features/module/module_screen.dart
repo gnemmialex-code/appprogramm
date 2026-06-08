@@ -15,10 +15,7 @@ import '../../ui/theme/app_colors.dart';
 import '../exercises/exercise_widgets.dart'
     show
         ActionTimerWidget,
-        DarkStepInteractive,
         ExerciseTile,
-        StepDemoWidget,
-        StepInteractive,
         StepQuestionWidget,
         colorForStep,
         iconForStep,
@@ -59,6 +56,32 @@ class _ModuleScreenState extends ConsumerState<ModuleScreen> {
   int _totalSeconds = 0;
   int _remaining = 0;
 
+  // 7-second minimum read-time lock per page.
+  bool _canSwipe = false;
+  int _countdown = 7;
+  Timer? _swipeTimer;
+  Timer? _cntTimer;
+  // Indices of pages that are never locked (quiz, quote, etc.)
+  final Set<int> _freePages = {};
+
+  void _kickTimer(int page) {
+    _swipeTimer?.cancel();
+    _cntTimer?.cancel();
+    if (_freePages.contains(page)) {
+      if (mounted) setState(() { _canSwipe = true; _countdown = 0; });
+      return;
+    }
+    if (mounted) setState(() { _canSwipe = false; _countdown = 7; });
+    _swipeTimer = Timer(const Duration(seconds: 7), () {
+      if (mounted) setState(() => _canSwipe = true);
+    });
+    _cntTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (!mounted) { t.cancel(); return; }
+      setState(() { if (_countdown > 0) _countdown--; });
+      if (_countdown <= 0) t.cancel();
+    });
+  }
+
   @override
   void initState() {
     super.initState();
@@ -80,6 +103,8 @@ class _ModuleScreenState extends ConsumerState<ModuleScreen> {
   @override
   void dispose() {
     _timer?.cancel();
+    _swipeTimer?.cancel();
+    _cntTimer?.cancel();
     _controller.dispose();
     super.dispose();
   }
@@ -154,8 +179,7 @@ class _ModuleScreenState extends ConsumerState<ModuleScreen> {
       par(_ExercisesCard(
         module: module,
         reinforcement: reinforcementExercises(reinforce),
-        hasQuiz: hasQuiz,
-        onNext: hasQuiz ? _next : () => _finish(module.id),
+        onNext: _next,
       )),
       if (hasQuiz)
         par(_QuizCard(
@@ -164,10 +188,25 @@ class _ModuleScreenState extends ConsumerState<ModuleScreen> {
             ref
                 .read(progressControllerProvider.notifier)
                 .recordModuleQuiz(module.id, score, total);
-            _finish(module.id);
+            _next();
           },
         )),
+      par(_QuoteCard(
+        domain: program.domain,
+        onFinish: () => _finish(module.id),
+      )),
     ];
+
+    // Mark quiz and quote pages as free (no 7-second lock).
+    _freePages
+      ..clear()
+      ..add(pages.length - 1); // quote (always last)
+    if (hasQuiz) _freePages.add(pages.length - 2); // quiz
+
+    // Start the first-page timer once.
+    if (!_canSwipe && _countdown == 7 && _page == 0 && _swipeTimer == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _kickTimer(0));
+    }
 
     // Note locations parallel to pages (null = page has no note support).
     final noteLocations = <NoteLocation?>[
@@ -196,7 +235,13 @@ class _ModuleScreenState extends ConsumerState<ModuleScreen> {
           PageView.builder(
             controller: _controller,
             scrollDirection: Axis.vertical,
-            onPageChanged: (p) => setState(() => _page = p),
+            physics: _canSwipe
+                ? const PageScrollPhysics()
+                : const NeverScrollableScrollPhysics(),
+            onPageChanged: (p) {
+              setState(() => _page = p);
+              _kickTimer(p);
+            },
             itemCount: pages.length,
             itemBuilder: (_, i) => pages[i],
           ),
@@ -285,6 +330,10 @@ class _ModuleScreenState extends ConsumerState<ModuleScreen> {
                     fontSize: 12,
                   ),
                 ),
+                if (!_canSwipe && !_freePages.contains(_page)) ...[
+                  const SizedBox(width: 8),
+                  _LockPill(countdown: _countdown),
+                ],
                 if (_timerOn) ...[
                   const SizedBox(width: 10),
                   _TimerPill(remaining: _remaining, total: _totalSeconds),
@@ -921,10 +970,6 @@ class _StepCardState extends State<_StepCard> with TickerProviderStateMixin {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 const SizedBox(height: 14),
-                                if (!isAction) ...[
-                                  StepDemoWidget(type: widget.step.type),
-                                  const SizedBox(height: 14),
-                                ],
                                 Text(
                                   widget.step.title,
                                   style: const TextStyle(
@@ -958,10 +1003,6 @@ class _StepCardState extends State<_StepCard> with TickerProviderStateMixin {
                                         setState(() => _actionDone = true);
                                       }
                                     },
-                                  )
-                                else
-                                  DarkStepInteractive(
-                                    type: widget.step.type,
                                   ),
                                 const SizedBox(height: 8),
                               ],
@@ -1009,12 +1050,10 @@ class _StepCardState extends State<_StepCard> with TickerProviderStateMixin {
 class _ExercisesCard extends StatelessWidget {
   final Module module;
   final List<Exercise> reinforcement;
-  final bool hasQuiz;
   final VoidCallback onNext;
   const _ExercisesCard({
     required this.module,
     this.reinforcement = const [],
-    required this.hasQuiz,
     required this.onNext,
   });
 
@@ -1067,9 +1106,42 @@ class _ExercisesCard extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           GradientButton(
-            label: hasQuiz ? 'Passer au quiz' : 'Terminer le module',
-            icon: hasQuiz ? Icons.quiz_rounded : Icons.flag_rounded,
+            label: 'Continuer',
+            icon: Icons.arrow_forward_rounded,
             onPressed: onNext,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Small lock indicator shown when the 7-second read timer is active.
+class _LockPill extends StatelessWidget {
+  final int countdown;
+  const _LockPill({required this.countdown});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.lock_outline_rounded, size: 11, color: Colors.white),
+          const SizedBox(width: 4),
+          Text(
+            '${countdown}s',
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: Colors.white,
+            ),
           ),
         ],
       ),
@@ -1112,6 +1184,324 @@ class _QuizCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Domain-specific closing quotes
+// ---------------------------------------------------------------------------
+
+const _kDomainQuotes = <String, ({String text, String author})>{
+  // Technology / Programming
+  'programming': (
+    text: 'La simplicité est la sophistication suprême.',
+    author: 'Leonardo da Vinci',
+  ),
+  'code': (
+    text: 'Tout code que tu n\'as pas écrit est du code que tu n\'as pas à maintenir.',
+    author: 'Jeff Atwood',
+  ),
+  'web': (
+    text: 'Le web est plus un phénomène social que technique.',
+    author: 'Tim Berners-Lee',
+  ),
+  'data': (
+    text: 'Les données sont le nouveau pétrole. Mais brutes, elles ne valent rien.',
+    author: 'Clive Humby',
+  ),
+  'ai': (
+    text: 'L\'intelligence artificielle est la nouvelle électricité.',
+    author: 'Andrew Ng',
+  ),
+  'cybersecurity': (
+    text: 'La sécurité n\'est pas un produit, c\'est un processus.',
+    author: 'Bruce Schneier',
+  ),
+  // Business & Finance
+  'business': (
+    text: 'Ton meilleur investissement, c\'est toi-même.',
+    author: 'Warren Buffett',
+  ),
+  'finance': (
+    text: 'Ne travaille pas pour l\'argent — fais-le travailler pour toi.',
+    author: 'Robert Kiyosaki',
+  ),
+  'entrepreneurship': (
+    text: 'Commencer, c\'est avoir à moitié réussi.',
+    author: 'Proverbe',
+  ),
+  'marketing': (
+    text: 'Le marketing est une bataille d\'idées, pas de produits.',
+    author: 'Al Ries',
+  ),
+  // Mindfulness & Well-being
+  'mindfulness': (
+    text: 'L\'instant présent est le seul moment disponible pour être en vie.',
+    author: 'Thich Nhat Hanh',
+  ),
+  'wellbeing': (
+    text: 'Prendre soin de soi n\'est pas un luxe, c\'est une nécessité.',
+    author: 'Audre Lorde',
+  ),
+  'meditation': (
+    text: 'Le calme est une superforce.',
+    author: 'Anonyme',
+  ),
+  // Fitness & Health
+  'fitness': (
+    text: 'Un corps sain héberge un esprit sain.',
+    author: 'Juvénal',
+  ),
+  'nutrition': (
+    text: 'Que ton alimentation soit ta première médecine.',
+    author: 'Hippocrate',
+  ),
+  // Languages & Communication
+  'language': (
+    text: 'Une autre langue, c\'est une autre âme.',
+    author: 'Charlemagne',
+  ),
+  'communication': (
+    text: 'La façon dont tu parles à toi-même compte plus que tout.',
+    author: 'Lisa M. Hayes',
+  ),
+  // Science & Math
+  'science': (
+    text: 'La science, c\'est d\'abord regarder le monde tel qu\'il est.',
+    author: 'Richard Feynman',
+  ),
+  'mathematics': (
+    text: 'Les mathématiques sont la langue dans laquelle Dieu a écrit l\'univers.',
+    author: 'Galilée',
+  ),
+  // Arts & Creativity
+  'art': (
+    text: 'La créativité, c\'est l\'intelligence qui s\'amuse.',
+    author: 'Albert Einstein',
+  ),
+  'music': (
+    text: 'La musique donne une âme à nos cœurs et des ailes à la pensée.',
+    author: 'Platon',
+  ),
+  'writing': (
+    text: 'Écrire, c\'est réfléchir à voix haute sur la page.',
+    author: 'E.M. Forster',
+  ),
+  // Philosophy & Personal Growth
+  'philosophy': (
+    text: 'Connais-toi toi-même.',
+    author: 'Socrate',
+  ),
+  'psychology': (
+    text: 'Ce que tu résistes persiste, ce que tu acceptes se transforme.',
+    author: 'Carl Jung',
+  ),
+  'productivity': (
+    text: 'Ce n\'est pas le temps qui manque, c\'est la direction.',
+    author: 'Sénèque',
+  ),
+  'leadership': (
+    text: 'Un leader est quelqu\'un qui connaît le chemin, le fait et le montre.',
+    author: 'John C. Maxwell',
+  ),
+};
+
+({String text, String author}) _quoteFor(String domain) {
+  // Exact match first, then partial match on the domain key.
+  final lower = domain.toLowerCase();
+  if (_kDomainQuotes.containsKey(lower)) return _kDomainQuotes[lower]!;
+  for (final key in _kDomainQuotes.keys) {
+    if (lower.contains(key) || key.contains(lower)) {
+      return _kDomainQuotes[key]!;
+    }
+  }
+  return (
+    text: 'Le savoir est la seule richesse qui grandit quand on la partage.',
+    author: 'Proverbe',
+  );
+}
+
+/// Closing card shown at the end of every chapter — immersive, gradient
+/// background, a domain-relevant quote, and the "Complete" button.
+class _QuoteCard extends StatefulWidget {
+  final String domain;
+  final VoidCallback onFinish;
+  const _QuoteCard({required this.domain, required this.onFinish});
+
+  @override
+  State<_QuoteCard> createState() => _QuoteCardState();
+}
+
+class _QuoteCardState extends State<_QuoteCard> with TickerProviderStateMixin {
+  late final AnimationController _grad = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 8),
+  )..repeat(reverse: true);
+
+  late final AnimationController _blobs = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 12),
+  )..repeat();
+
+  late final AnimationController _enter = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 700),
+  )..forward();
+
+  @override
+  void dispose() {
+    _grad.dispose();
+    _blobs.dispose();
+    _enter.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final quote = _quoteFor(widget.domain);
+    final pad = MediaQuery.of(context).padding;
+
+    return AnimatedBuilder(
+      animation: Listenable.merge([_grad, _blobs, _enter]),
+      builder: (ctx, _) {
+        final g = _grad.value;
+        final fade = CurvedAnimation(parent: _enter, curve: Curves.easeOut).value;
+        final slide = (1.0 - fade) * 40;
+
+        // Calm deep-blue/indigo palette for the closing card.
+        final base = HSLColor.fromAHSL(1, 235, 0.55, 0.36);
+        final top = base
+            .withLightness((base.lightness + 0.12 * g).clamp(0.0, 1.0))
+            .toColor();
+        final bottom =
+            base.withLightness((base.lightness - 0.18).clamp(0.0, 1.0)).toColor();
+
+        return Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment(-0.6 + 0.4 * g, -1),
+              end: Alignment(0.6 - 0.3 * g, 1),
+              colors: [top, bottom],
+            ),
+          ),
+          child: CustomPaint(
+            painter: _BlobPainter(t: _blobs.value),
+            child: SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(28, pad.top + 60, 28, pad.bottom + 28),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Spacer(),
+
+                    // Quotation mark decoration
+                    Opacity(
+                      opacity: fade,
+                      child: Transform.translate(
+                        offset: Offset(0, slide),
+                        child: Text(
+                          '“',
+                          style: TextStyle(
+                            fontSize: 96,
+                            height: 0.6,
+                            fontWeight: FontWeight.w900,
+                            color: Colors.white.withValues(alpha: 0.18),
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    // Quote text
+                    Opacity(
+                      opacity: fade,
+                      child: Transform.translate(
+                        offset: Offset(0, slide * 0.8),
+                        child: Text(
+                          quote.text,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 24,
+                            fontWeight: FontWeight.w700,
+                            height: 1.35,
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    // Author
+                    Opacity(
+                      opacity: fade * 0.8,
+                      child: Transform.translate(
+                        offset: Offset(0, slide * 0.6),
+                        child: Text(
+                          '— ${quote.author}',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.72),
+                            fontSize: 15,
+                            fontStyle: FontStyle.italic,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    const Spacer(),
+
+                    // Finish button
+                    Opacity(
+                      opacity: fade,
+                      child: Transform.translate(
+                        offset: Offset(0, slide * 0.4),
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: Material(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(18),
+                            child: InkWell(
+                              onTap: widget.onFinish,
+                              borderRadius: BorderRadius.circular(18),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 17),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.check_circle_rounded,
+                                      color: bottom,
+                                      size: 22,
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Text(
+                                      'Terminer le chapitre',
+                                      style: TextStyle(
+                                        color: bottom,
+                                        fontSize: 17,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

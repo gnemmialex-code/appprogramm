@@ -114,7 +114,11 @@ _kExperienceOptions = [
 // ---------------------------------------------------------------------------
 
 class OnboardingScreen extends ConsumerStatefulWidget {
-  const OnboardingScreen({super.key});
+  /// When true (after profile-setup), skip the welcome + name + email steps
+  /// and start directly at domain selection (step 3).
+  final bool skipProfile;
+
+  const OnboardingScreen({super.key, this.skipProfile = false});
 
   @override
   ConsumerState<OnboardingScreen> createState() => _OnboardingScreenState();
@@ -124,18 +128,32 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   // Total steps: 0 = welcome, 1..8 = questions.
   static const int _stepCount = 9;
 
-  int _step = 0;
+  late int _step;
   bool _forward = true; // controls slide direction of the transition
 
   // Collected answers ------------------------------------------------------
   final _firstNameCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
+
   String? _domainId;
   String? _subThemeId; // optional
   int? _dailyMinutes;
   int? _sessionsPerDay;
   String? _goalId;
   String? _experienceId;
+
+  @override
+  void initState() {
+    super.initState();
+    // If coming from profile-setup, name/email already saved — jump to domain.
+    _step = widget.skipProfile ? 3 : 0;
+    // Pre-fill from existing profile when skipping.
+    if (widget.skipProfile) {
+      final profile = ref.read(userProfileProvider);
+      _firstNameCtrl.text = profile.firstName;
+      _emailCtrl.text = profile.email;
+    }
+  }
 
   @override
   void dispose() {

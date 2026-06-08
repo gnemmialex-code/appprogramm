@@ -13,8 +13,10 @@ import '../../features/flash/flash_screen.dart';
 import '../../features/generation/generation_screen.dart';
 import '../../features/module/module_screen.dart';
 import '../../features/notes/notes_screen.dart';
+import '../../features/onboarding/intro_slides_screen.dart';
 import '../../features/onboarding/onboarding_screen.dart';
 import '../../features/onboarding/personality_screen.dart';
+import '../../features/onboarding/profile_setup_screen.dart';
 import '../../features/onboarding/start_screen.dart';
 import '../../features/profile/profile_screen.dart';
 import '../../features/program/program_screen.dart';
@@ -32,25 +34,52 @@ import '../../ui/theme/app_colors.dart';
 /// onboarding-completion state and force first-launch users through the
 /// questionnaire before reaching any other screen.
 final goRouterProvider = Provider<GoRouter>((ref) {
-  final onboardingDone = ref.read(appStorageProvider).onboardingComplete;
+  final storage = ref.read(appStorageProvider);
+  final introSeen = storage.introSeen;
+  final onboardingDone = storage.onboardingComplete;
+
+  String initialLocation;
+  if (!introSeen) {
+    initialLocation = '/intro';
+  } else if (!onboardingDone) {
+    initialLocation = '/onboarding';
+  } else {
+    initialLocation = '/';
+  }
 
   return GoRouter(
-    initialLocation: onboardingDone ? '/' : '/onboarding',
+    initialLocation: initialLocation,
     redirect: (context, state) {
+      final intro = ref.read(appStorageProvider).introSeen;
       final done = ref.read(onboardingCompleteProvider);
       final loc = state.matchedLocation;
+
+      final inIntroFlow = loc == '/intro' || loc == '/profile-setup';
       final inOnboarding = loc == '/onboarding' || loc == '/personality';
 
-      // First launch: keep the user inside the onboarding flow.
-      if (!done && !inOnboarding) return '/onboarding';
-      // Already onboarded: don't let them fall back into the questionnaire.
-      if (done && loc == '/onboarding') return '/';
+      // Not seen intro yet → force into intro
+      if (!intro && !inIntroFlow) return '/intro';
+      // Seen intro but onboarding not done → onboarding
+      if (intro && !done && !inOnboarding && !inIntroFlow) return '/onboarding';
+      // All done → don't fall back into setup flows
+      if (done && (inOnboarding || inIntroFlow)) return '/';
       return null;
     },
     routes: [
       GoRoute(
+        path: '/intro',
+        builder: (_, _) => const IntroSlidesScreen(),
+      ),
+      GoRoute(
+        path: '/profile-setup',
+        pageBuilder: (context, state) =>
+            _fade(state, const ProfileSetupScreen()),
+      ),
+      GoRoute(
         path: '/onboarding',
-        builder: (_, _) => const OnboardingScreen(),
+        builder: (_, state) => OnboardingScreen(
+          skipProfile: state.extra == 'skipProfile',
+        ),
       ),
       GoRoute(
         path: '/personality',

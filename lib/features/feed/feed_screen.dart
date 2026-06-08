@@ -349,7 +349,7 @@ class _FeedCardViewState extends State<_FeedCardView>
           Positioned.fill(
             child: AnimatedBuilder(
               animation: _bgCtrl,
-              builder: (_, __) => CustomPaint(
+              builder: (_, _) => CustomPaint(
                 painter: _OrbsPainter(
                   t: _bgCtrl.value,
                   baseColor: vivid,
@@ -397,6 +397,27 @@ class _FeedCardViewState extends State<_FeedCardView>
                     ],
                   ),
                 ),
+                if (widget.card.tag.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.18),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      widget.card.tag,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 22),
                 // Title
                 Text(

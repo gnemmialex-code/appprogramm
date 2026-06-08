@@ -16,6 +16,20 @@ class DomainQuizQuestion {
 List<DomainQuizQuestion> questionsFor(String domainId) =>
     kDomainQuiz[domainId] ?? const [];
 
+/// Returns 7 questions for a given domain and level (1–10).
+/// Levels 1–4 use the base pool; 5–10 use the extended level pool.
+List<DomainQuizQuestion> questionsForLevel(String domainId, int level) {
+  final extended = kDomainQuizLevels[domainId];
+  if (extended != null) {
+    final pool = extended[level];
+    if (pool != null && pool.isNotEmpty) return pool;
+  }
+  // Fallback: cycle through base questions
+  final base = kDomainQuiz[domainId] ?? const [];
+  if (base.isEmpty) return const [];
+  return List.generate(7, (i) => base[i % base.length]);
+}
+
 const Map<String, List<DomainQuizQuestion>> kDomainQuiz = {
   // ── Psychologie ────────────────────────────────────────────────────────────
   'psychologie': [
@@ -797,3 +811,6 @@ const Map<String, List<DomainQuizQuestion>> kDomainQuiz = {
     ),
   ],
 };
+
+// 10 levels × 7 questions per domain
+const Map<String, Map<int, List<DomainQuizQuestion>>> kDomainQuizLevels = {};

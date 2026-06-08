@@ -988,3 +988,35 @@ class NotesController extends Notifier<List<AppNote>> {
 final notesProvider = NotifierProvider<NotesController, List<AppNote>>(
   NotesController.new,
 );
+
+// ---------------------------------------------------------------------------
+// Quiz level progress — sequential level unlocking per domain
+// ---------------------------------------------------------------------------
+
+class QuizProgressController extends Notifier<Map<String, int>> {
+  @override
+  Map<String, int> build() => ref.read(appStorageProvider).quizProgress;
+
+  /// Returns the current level to play (1-based). 1 = level 1 if no progress.
+  int currentLevel(String domainId) {
+    final done = state[domainId] ?? 0;
+    return (done + 1).clamp(1, 10);
+  }
+
+  /// Returns whether a level has already been completed for a domain.
+  bool isCompleted(String domainId, int level) =>
+      (state[domainId] ?? 0) >= level;
+
+  /// Records that a level was successfully completed.
+  Future<void> completeLevel(String domainId, int level) async {
+    final prev = state[domainId] ?? 0;
+    if (level <= prev) return;
+    state = {...state, domainId: level};
+    await ref.read(appStorageProvider).saveQuizProgress(state);
+  }
+}
+
+final quizProgressProvider =
+    NotifierProvider<QuizProgressController, Map<String, int>>(
+      QuizProgressController.new,
+    );

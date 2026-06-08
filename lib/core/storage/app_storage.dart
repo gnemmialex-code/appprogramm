@@ -125,6 +125,17 @@ class AppStorage {
   bool get darkMode => _box.get('darkMode') as bool? ?? false;
   Future<void> setDarkMode(bool v) => _box.put('darkMode', v);
 
+  // --- Intro slides ----------------------------------------------------------
+  /// Whether the user has seen the intro slides + set up their profile.
+  bool get introSeen => _box.get('introSeen') as bool? ?? false;
+  Future<void> setIntroSeen() => _box.put('introSeen', true);
+
+  // --- Profile photo ---------------------------------------------------------
+  String? get profilePhotoPath => _box.get('profilePhotoPath') as String?;
+  Future<void> saveProfilePhotoPath(String path) =>
+      _box.put('profilePhotoPath', path);
+  Future<void> clearProfilePhotoPath() => _box.delete('profilePhotoPath');
+
   // --- Onboarding ------------------------------------------------------------
   /// Whether the first-launch questionnaire + personality recap has been done.
   bool get onboardingComplete =>
@@ -144,6 +155,17 @@ class AppStorage {
       _box.get('newsletterFreq') as String? ?? 'weekly';
   Future<void> setNewsletterFrequency(String v) =>
       _box.put('newsletterFreq', v);
+
+  // --- Quiz level progress (domainId → highest completed level) -------------
+  Map<String, int> get quizProgress {
+    final raw = _box.get('quizProgress') as String?;
+    if (raw == null) return {};
+    return (jsonDecode(raw) as Map<String, dynamic>)
+        .map((k, v) => MapEntry(k, v as int));
+  }
+
+  Future<void> saveQuizProgress(Map<String, int> data) =>
+      _box.put('quizProgress', jsonEncode(data));
 
   Future<void> wipe() => _box.clear();
 }

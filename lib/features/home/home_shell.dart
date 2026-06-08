@@ -23,33 +23,12 @@ class HomeShell extends ConsumerStatefulWidget {
   ConsumerState<HomeShell> createState() => _HomeShellState();
 }
 
-class _HomeShellState extends ConsumerState<HomeShell>
-    with SingleTickerProviderStateMixin {
+class _HomeShellState extends ConsumerState<HomeShell> {
   int _tab = 0;
-  late final AnimationController _fadeCtrl;
-  late final Animation<double> _fadeAnim;
-
-  @override
-  void initState() {
-    super.initState();
-    _fadeCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 360),
-      value: 1.0,
-    );
-    _fadeAnim = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOutCubic);
-  }
-
-  @override
-  void dispose() {
-    _fadeCtrl.dispose();
-    super.dispose();
-  }
 
   void _setTab(int t) {
     if (t == _tab) return;
     setState(() => _tab = t);
-    _fadeCtrl.forward(from: 0.0);
   }
 
   @override
@@ -60,19 +39,25 @@ class _HomeShellState extends ConsumerState<HomeShell>
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // ── Tab bodies ──────────────────────────────────────────────────
-          FadeTransition(
-            opacity: _fadeAnim,
-            child: IndexedStack(
-              index: _tab,
-              children: const [
-                FeedScreen(showClose: false),
-                _QuizTab(),
-                _ProgramTab(),
-                _ProfileTab(),
-              ],
+          // ── Tab bodies (all always mounted, cross-fade — no black flash) ─
+          for (int i = 0; i < 4; i++)
+            AnimatedOpacity(
+              opacity: _tab == i ? 1.0 : 0.0,
+              duration: const Duration(milliseconds: 280),
+              curve: Curves.easeOutCubic,
+              child: IgnorePointer(
+                ignoring: _tab != i,
+                child: TickerMode(
+                  enabled: _tab == i,
+                  child: const [
+                    FeedScreen(showClose: false),
+                    _QuizTab(),
+                    _ProgramTab(),
+                    _ProfileTab(),
+                  ][i],
+                ),
+              ),
             ),
-          ),
 
           // ── Floating bottom nav ─────────────────────────────────────────
           Positioned(
@@ -101,7 +86,7 @@ class _BottomNav extends StatelessWidget {
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
           decoration: BoxDecoration(
             color: AppColors.isDark
                 ? Colors.black.withValues(alpha: 0.48)
@@ -168,35 +153,41 @@ class _NavItem extends StatelessWidget {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 220),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: BoxDecoration(
-          color: active ? const Color(0xFF0C0C14) : Colors.transparent,
-          borderRadius: BorderRadius.circular(22),
-        ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            AnimatedScale(
-              scale: active ? 1.1 : 1.0,
-              duration: const Duration(milliseconds: 200),
-              child: Icon(
-                icon,
-                size: 24,
-                color: active
-                    ? Colors.white
-                    : AppColors.ink.withValues(alpha: 0.40),
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 220),
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: active ? const Color(0xFF0C0C14) : Colors.transparent,
+                shape: BoxShape.circle,
+              ),
+              child: Center(
+                child: AnimatedScale(
+                  scale: active ? 1.1 : 1.0,
+                  duration: const Duration(milliseconds: 200),
+                  child: Icon(
+                    icon,
+                    size: 22,
+                    color: active
+                        ? Colors.white
+                        : AppColors.ink.withValues(alpha: 0.40),
+                  ),
+                ),
               ),
             ),
-            const SizedBox(height: 3),
+            const SizedBox(height: 2),
             AnimatedDefaultTextStyle(
               duration: const Duration(milliseconds: 200),
               style: TextStyle(
                 fontSize: 10,
                 fontWeight: active ? FontWeight.w700 : FontWeight.w400,
                 color: active
-                    ? Colors.white
+                    ? Colors.black
                     : AppColors.ink.withValues(alpha: 0.40),
               ),
               child: Text(label),
