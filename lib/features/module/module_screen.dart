@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -6,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/adaptive/adaptive.dart';
-import '../../core/ai/generator.dart' show tierFromMinutes, tierMinutesPerChapter;
 import '../../core/models/content_models.dart';
 import '../../core/models/note_model.dart';
 import '../../state/app_providers.dart';
@@ -50,33 +48,8 @@ class _ModuleScreenState extends ConsumerState<ModuleScreen> {
   int _page = 0;
   final DateTime _openedAt = DateTime.now();
 
-  // Optional chapter timer (enabled in settings for a sense of urgency).
-  Timer? _timer;
-  bool _timerOn = false;
-  int _totalSeconds = 0;
-  int _remaining = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    // Start a countdown sized to the user's per-chapter pace, if enabled.
-    if (ref.read(appSettingsProvider).chapterTimer) {
-      final avg = ref.read(dailyAvailabilityProvider).averageActiveMinutes;
-      final minutes = tierMinutesPerChapter(tierFromMinutes(avg));
-      _timerOn = true;
-      _totalSeconds = minutes * 60;
-      _remaining = _totalSeconds;
-      _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-        if (!mounted) return;
-        if (_remaining <= 0) return;
-        setState(() => _remaining--);
-      });
-    }
-  }
-
   @override
   void dispose() {
-    _timer?.cancel();
     _controller.dispose();
     super.dispose();
   }
@@ -85,39 +58,6 @@ class _ModuleScreenState extends ConsumerState<ModuleScreen> {
     _controller.nextPage(
       duration: const Duration(milliseconds: 380),
       curve: Curves.easeOutCubic,
-    );
-  }
-
-  void _showTimerSheet(BuildContext context, WidgetRef ref) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _TimerToggleSheet(
-        timerOn: _timerOn,
-        onToggle: (enabled) {
-          ref.read(appSettingsProvider.notifier).setChapterTimer(enabled);
-          setState(() {
-            _timerOn = enabled;
-            if (enabled) {
-              final avg =
-                  ref.read(dailyAvailabilityProvider).averageActiveMinutes;
-              final minutes =
-                  tierMinutesPerChapter(tierFromMinutes(avg));
-              _totalSeconds = minutes * 60;
-              _remaining = _totalSeconds;
-              _timer?.cancel();
-              _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-                if (!mounted) return;
-                if (_remaining <= 0) return;
-                setState(() => _remaining--);
-              });
-            } else {
-              _timer?.cancel();
-              _timer = null;
-            }
-          });
-        },
-      ),
     );
   }
 
@@ -330,13 +270,6 @@ class _ModuleScreenState extends ConsumerState<ModuleScreen> {
                     fontSize: 12,
                   ),
                 ),
-                const SizedBox(width: 6),
-                GestureDetector(
-                  onTap: () => _showTimerSheet(context, ref),
-                  child: _timerOn
-                      ? _TimerPill(remaining: _remaining, total: _totalSeconds)
-                      : _TimerOffPill(),
-                ),
               ],
             ),
           ),
@@ -404,88 +337,6 @@ class _CircleButton extends StatelessWidget {
         ),
         child: Icon(icon, color: Colors.white, size: 22),
       ),
-    );
-  }
-}
-
-/// Countdown chip shown at the top when the chapter timer is enabled. Goes
-/// from calm → warning → urgent (pulsing) as time runs out, then "Temps écoulé".
-class _TimerPill extends StatefulWidget {
-  final int remaining;
-  final int total;
-  const _TimerPill({required this.remaining, required this.total});
-
-  @override
-  State<_TimerPill> createState() => _TimerPillState();
-}
-
-class _TimerPillState extends State<_TimerPill>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _pulse = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 700),
-  )..repeat(reverse: true);
-
-  @override
-  void dispose() {
-    _pulse.dispose();
-    super.dispose();
-  }
-
-  String _fmt(int s) {
-    final m = (s ~/ 60).toString();
-    final sec = (s % 60).toString().padLeft(2, '0');
-    return '$m:$sec';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final elapsed = widget.remaining <= 0;
-    final frac = widget.total == 0 ? 0.0 : widget.remaining / widget.total;
-    final urgent = elapsed || frac <= 0.2;
-
-    final color = elapsed
-        ? AppColors.danger
-        : frac <= 0.2
-        ? AppColors.danger
-        : frac <= 0.5
-        ? AppColors.sun
-        : AppColors.brandStart;
-
-    final pill = Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.18),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withValues(alpha: 0.5)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            elapsed ? Icons.timer_off_rounded : Icons.timer_rounded,
-            size: 14,
-            color: color,
-          ),
-          const SizedBox(width: 5),
-          Text(
-            elapsed ? 'Temps écoulé' : _fmt(widget.remaining),
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w800,
-              color: color,
-            ),
-          ),
-        ],
-      ),
-    );
-
-    if (!urgent) return pill;
-    return AnimatedBuilder(
-      animation: _pulse,
-      builder: (_, child) =>
-          Transform.scale(scale: 1 + 0.06 * _pulse.value, child: child),
-      child: pill,
     );
   }
 }
@@ -1148,165 +999,6 @@ class _QuizCard extends StatelessWidget {
                 onFinished: onFinish,
               ),
             ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Timer toggle UI
-// ---------------------------------------------------------------------------
-
-/// Small pill shown in the top bar when the chapter timer is disabled.
-class _TimerOffPill extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.18),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.timer_off_outlined, size: 14,
-              color: Colors.white.withValues(alpha: 0.55)),
-          const SizedBox(width: 5),
-          Text('Chrono',
-              style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.white.withValues(alpha: 0.55))),
-        ],
-      ),
-    );
-  }
-}
-
-class _TimerToggleSheet extends StatelessWidget {
-  final bool timerOn;
-  final ValueChanged<bool> onToggle;
-  const _TimerToggleSheet({required this.timerOn, required this.onToggle});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(12, 0, 12, 24),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.all(Radius.circular(24)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 20, 24, 28),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Center(
-              child: Container(
-                width: 36, height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.black12,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 18),
-            const Text('Chronomètre de chapitre',
-                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
-            const SizedBox(height: 6),
-            Text(
-              'Activer le chrono te donne un rythme et une sensation d\'urgence productive.',
-              style: TextStyle(fontSize: 13, color: AppColors.inkSoft, height: 1.4),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 20),
-            _TimerOption(
-              icon: Icons.timer_rounded,
-              label: 'Avec chrono',
-              description: 'Un compte à rebours visible adapté à ton rythme',
-              selected: timerOn,
-              color: AppColors.brandStart,
-              onTap: () { Navigator.pop(context); onToggle(true); },
-            ),
-            const SizedBox(height: 10),
-            _TimerOption(
-              icon: Icons.timer_off_rounded,
-              label: 'Sans chrono',
-              description: 'Avance à ton propre rythme, sans contrainte de temps',
-              selected: !timerOn,
-              color: AppColors.inkSoft,
-              onTap: () { Navigator.pop(context); onToggle(false); },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _TimerOption extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String description;
-  final bool selected;
-  final Color color;
-  final VoidCallback onTap;
-  const _TimerOption({
-    required this.icon, required this.label, required this.description,
-    required this.selected, required this.color, required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: selected ? color.withValues(alpha: 0.10) : Colors.grey.shade50,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: selected ? color : Colors.black.withValues(alpha: 0.08),
-            width: selected ? 2 : 1,
-          ),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 42, height: 42,
-              decoration: BoxDecoration(
-                color: selected
-                    ? color.withValues(alpha: 0.15)
-                    : Colors.grey.shade200,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(icon,
-                  color: selected ? color : AppColors.inkSoft, size: 20),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(label,
-                      style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: selected ? color : AppColors.ink)),
-                  const SizedBox(height: 2),
-                  Text(description,
-                      style: TextStyle(
-                          fontSize: 12, color: AppColors.inkSoft)),
-                ],
-              ),
-            ),
-            if (selected)
-              Icon(Icons.check_circle_rounded, color: color, size: 22),
           ],
         ),
       ),

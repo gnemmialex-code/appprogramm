@@ -144,12 +144,6 @@ class AppStorage {
       _box.put('onboardingComplete', v);
 
   // --- Preferences (timer + newsletter rhythm) -------------------------------
-  /// Whether a countdown timer is shown on every chapter for a sense of pace.
-  bool get chapterTimerEnabled =>
-      _box.get('chapterTimer') as bool? ?? true;
-  Future<void> setChapterTimerEnabled(bool v) =>
-      _box.put('chapterTimer', v);
-
   /// Personalised newsletter rhythm: 'daily', 'weekly' (default) or 'off'.
   String get newsletterFrequency =>
       _box.get('newsletterFreq') as String? ?? 'weekly';

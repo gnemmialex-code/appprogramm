@@ -662,19 +662,15 @@ String newsletterLabel(NewsletterFrequency f) => switch (f) {
 };
 
 class AppSettingsState {
-  final bool chapterTimer;
   final NewsletterFrequency newsletter;
 
   const AppSettingsState({
-    this.chapterTimer = false,
     this.newsletter = NewsletterFrequency.weekly,
   });
 
   AppSettingsState copyWith({
-    bool? chapterTimer,
     NewsletterFrequency? newsletter,
   }) => AppSettingsState(
-    chapterTimer: chapterTimer ?? this.chapterTimer,
     newsletter: newsletter ?? this.newsletter,
   );
 }
@@ -684,14 +680,8 @@ class AppSettingsController extends Notifier<AppSettingsState> {
   AppSettingsState build() {
     final s = ref.read(appStorageProvider);
     return AppSettingsState(
-      chapterTimer: s.chapterTimerEnabled,
       newsletter: newsletterFromKey(s.newsletterFrequency),
     );
-  }
-
-  Future<void> setChapterTimer(bool v) async {
-    state = state.copyWith(chapterTimer: v);
-    await ref.read(appStorageProvider).setChapterTimerEnabled(v);
   }
 
   Future<void> setNewsletter(NewsletterFrequency f) async {

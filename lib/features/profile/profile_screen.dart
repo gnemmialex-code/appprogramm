@@ -100,18 +100,6 @@ class ProfileScreen extends ConsumerWidget {
           const SizedBox(height: 8),
           _SectionCard(
             children: [
-              _SwitchTile(
-                icon: Icons.timer_rounded,
-                iconColor: AppColors.rose,
-                title: 'Minuteur de chapitre',
-                subtitle: settings.chapterTimer
-                    ? 'Un compte à rebours sur chaque chapitre'
-                    : 'Ajoute un peu de pression pour aller vite',
-                value: settings.chapterTimer,
-                onChanged: (v) =>
-                    ref.read(appSettingsProvider.notifier).setChapterTimer(v),
-              ),
-              const _Divider(),
               _InfoTile(
                 icon: Icons.mark_email_unread_rounded,
                 iconColor: AppColors.sky,
@@ -780,69 +768,6 @@ class _DarkModeTile extends StatelessWidget {
               ),
               Switch(
                 value: isDark,
-                activeThumbColor: AppColors.brandStart,
-                activeTrackColor: AppColors.brandStart.withValues(alpha: 0.4),
-                onChanged: onChanged,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Generic settings row with a trailing switch.
-class _SwitchTile extends StatelessWidget {
-  final IconData icon;
-  final Color iconColor;
-  final String title;
-  final String subtitle;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-
-  const _SwitchTile({
-    required this.icon,
-    required this.iconColor,
-    required this.title,
-    required this.subtitle,
-    required this.value,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () => onChanged(!value),
-        borderRadius: BorderRadius.circular(18),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          child: Row(
-            children: [
-              Icon(icon, size: 22, color: iconColor),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    Text(
-                      subtitle,
-                      style: TextStyle(fontSize: 12, color: AppColors.inkSoft),
-                    ),
-                  ],
-                ),
-              ),
-              Switch(
-                value: value,
                 activeThumbColor: AppColors.brandStart,
                 activeTrackColor: AppColors.brandStart.withValues(alpha: 0.4),
                 onChanged: onChanged,
