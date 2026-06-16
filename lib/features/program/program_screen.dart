@@ -230,15 +230,13 @@ class ProgramScreen extends ConsumerWidget {
     }
 
     final widgets = <Widget>[];
-    // A level is unlocked only when the previous level is fully completed.
-    var previousComplete = true;
     for (var p = 0; p < program.parts.length; p++) {
       final part = program.parts[p];
       final partModulesDone = part.moduleIds
           .where(progress.completedModules.contains)
           .length;
       final allDone = partModulesDone == part.moduleIds.length;
-      final locked = !previousComplete;
+      const locked = false;
 
       widgets.add(_PartHeader(part: part, locked: locked, completed: allDone));
       for (final id in part.moduleIds) {
@@ -254,9 +252,7 @@ class ProgramScreen extends ConsumerWidget {
                 module: m,
                 done: progress.completedModules.contains(m.id),
                 locked: locked,
-                onOpen: locked
-                    ? () => _lockedToast(context)
-                    : () => context.push('/module/$i'),
+                onOpen: () => context.push('/module/$i'),
               ),
             ),
           ),
@@ -273,15 +269,12 @@ class ProgramScreen extends ConsumerWidget {
               unlocked: allDone,
               partDone: partModulesDone,
               partTotal: part.moduleIds.length,
-              onTap: locked
-                  ? () => _lockedToast(context)
-                  : () => context.push('/partquiz/$p'),
+              onTap: () => context.push('/partquiz/$p'),
             ),
           ),
         ),
       );
 
-      previousComplete = allDone;
     }
     return widgets;
   }
@@ -293,17 +286,6 @@ class ProgramScreen extends ConsumerWidget {
     // to carry the reinforcement.
     final allDone = progress.completedModules.length >= program.modules.length;
     return allDone ? 0 : struggling.length;
-  }
-
-  void _lockedToast(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          '🔒 Termine le niveau précédent pour débloquer celui-ci.',
-        ),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
   }
 }
 

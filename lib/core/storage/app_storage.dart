@@ -146,7 +146,7 @@ class AppStorage {
   // --- Preferences (timer + newsletter rhythm) -------------------------------
   /// Whether a countdown timer is shown on every chapter for a sense of pace.
   bool get chapterTimerEnabled =>
-      _box.get('chapterTimer') as bool? ?? false;
+      _box.get('chapterTimer') as bool? ?? true;
   Future<void> setChapterTimerEnabled(bool v) =>
       _box.put('chapterTimer', v);
 

@@ -432,16 +432,8 @@ class _FeedCardViewState extends State<_FeedCardView>
                   ),
                 ),
                 const SizedBox(height: 18),
-                // Description
-                Text(
-                  widget.card.body,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.93),
-                    fontSize: 17,
-                    height: 1.5,
-                  ),
-                ),
+                // Description with per-sentence detail buttons
+                _SentenceBody(card: widget.card),
                 if (widget.showHint) ...[
                   const SizedBox(height: 26),
                   Row(
@@ -602,6 +594,212 @@ class _Action extends StatelessWidget {
             shape: BoxShape.circle,
           ),
           child: Icon(icon, color: Colors.white, size: 26),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Sentence body with per-sentence detail buttons ──────────────────────────
+
+class _SentenceBody extends StatelessWidget {
+  final FeedCard card;
+  const _SentenceBody({required this.card});
+
+  static List<String> _split(String body, String tag) {
+    if (tag.contains('Citation')) return [body];
+    final parts = body.split(RegExp(r'\.\s+(?=[A-ZÀÁÂÃÄÇÈÉÊËÎÏÙÚÛÜ«0-9L])'));
+    if (parts.length <= 1) return [body];
+    final out = <String>[];
+    for (var i = 0; i < parts.length; i++) {
+      var s = parts[i].trim();
+      if (s.isEmpty) continue;
+      if (i < parts.length - 1 &&
+          !s.endsWith('.') &&
+          !s.endsWith('?') &&
+          !s.endsWith('!') &&
+          !s.endsWith('»')) {
+        s = '$s.';
+      }
+      out.add(s);
+    }
+    return out.isEmpty ? [body] : out;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final sentences = _split(card.body, card.tag);
+    final details = card.sentenceDetails;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var i = 0; i < sentences.length; i++) ...[
+          if (i > 0) const SizedBox(height: 10),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Flexible(
+                child: Text(
+                  sentences[i],
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.93),
+                    fontSize: 17,
+                    height: 1.5,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              _InfoButton(
+                sentence: sentences[i],
+                detail: (details != null && i < details.length)
+                    ? details[i]
+                    : null,
+                cardTitle: card.title,
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _InfoButton extends StatelessWidget {
+  final String sentence;
+  final String? detail;
+  final String cardTitle;
+  const _InfoButton({
+    required this.sentence,
+    required this.detail,
+    required this.cardTitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => showModalBottomSheet(
+        context: context,
+        backgroundColor: Colors.transparent,
+        isScrollControlled: true,
+        builder: (_) => _DetailSheet(
+          sentence: sentence,
+          detail: detail,
+          cardTitle: cardTitle,
+        ),
+      ),
+      child: Container(
+        width: 20,
+        height: 20,
+        margin: const EdgeInsets.only(top: 3),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.22),
+          shape: BoxShape.circle,
+        ),
+        alignment: Alignment.center,
+        child: const Text(
+          'i',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            fontStyle: FontStyle.italic,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DetailSheet extends StatelessWidget {
+  final String sentence;
+  final String? detail;
+  final String cardTitle;
+  const _DetailSheet({
+    required this.sentence,
+    required this.detail,
+    required this.cardTitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(top: 80),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.black12,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 18),
+              Text(
+                cardTitle.toUpperCase(),
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.black38,
+                  letterSpacing: 1.1,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.black.withValues(alpha: 0.08)),
+                ),
+                child: Text(
+                  sentence,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    height: 1.45,
+                    color: Colors.black87,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Pour mieux comprendre',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.black54,
+                  letterSpacing: 0.3,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                detail ??
+                    'Ce point fait partie du concept « $cardTitle ». '
+                        'Relis la carte complète pour saisir l\'ensemble du contexte.',
+                style: const TextStyle(
+                  fontSize: 15,
+                  height: 1.6,
+                  color: Colors.black87,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

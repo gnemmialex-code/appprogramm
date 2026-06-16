@@ -492,43 +492,72 @@ class _DomainSelectionScreenState extends ConsumerState<DomainSelectionScreen> {
   }
 
   Widget _customCard(BuildContext context) {
-    return SoftCard(
-      color: AppColors.mint.withValues(alpha: 0.20),
-      onTap: () {
-        _wake();
-        context.push('/custom');
-      },
-      child: Row(
+    return Opacity(
+      opacity: 0.55,
+      child: Stack(
         children: [
-          AmbientBob(
-            period: const Duration(milliseconds: 2600),
-            child: TintedIcon(
-              icon: Icons.auto_awesome_rounded,
-              color: AppColors.mint,
-              size: 44,
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          SoftCard(
+            color: AppColors.mint.withValues(alpha: 0.20),
+            child: Row(
               children: [
-                Text(
-                  'Mon propre programme',
-                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+                AmbientBob(
+                  period: const Duration(milliseconds: 2600),
+                  child: TintedIcon(
+                    icon: Icons.auto_awesome_rounded,
+                    color: AppColors.mint,
+                    size: 44,
+                  ),
                 ),
-                SizedBox(height: 2),
-                Text(
-                  'Décris un thème, l\'IA construit tout',
-                  style: TextStyle(fontSize: 13, color: AppColors.inkSoft),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Mon propre programme',
+                        style:
+                            TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+                      ),
+                      SizedBox(height: 2),
+                      Text(
+                        'Décris un thème, l\'IA construit tout',
+                        style:
+                            TextStyle(fontSize: 13, color: AppColors.inkSoft),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(
+                  Icons.lock_outline_rounded,
+                  size: 18,
+                  color: AppColors.inkSoft,
                 ),
               ],
             ),
           ),
-          Icon(
-            Icons.arrow_forward_ios_rounded,
-            size: 16,
-            color: AppColors.inkSoft,
+          Positioned(
+            top: 10,
+            right: 12,
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: AppColors.inkSoft.withValues(alpha: 0.18),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: AppColors.inkSoft.withValues(alpha: 0.3),
+                  width: 0.8,
+                ),
+              ),
+              child: Text(
+                'Bientôt',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.inkSoft,
+                ),
+              ),
+            ),
           ),
         ],
       ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../domain_selection/domains_data.dart';
+import 'feed_detail_data.dart';
 
 class FeedCard {
   final String title;
@@ -20,6 +21,9 @@ class FeedCard {
     required this.color,
     this.tag = '',
   });
+
+  /// Per-sentence detail strings looked up from the detail data file.
+  List<String>? get sentenceDetails => kFeedSentenceDetails[title];
 }
 
 const Map<String, List<(String, String, String)>> _cardData = {

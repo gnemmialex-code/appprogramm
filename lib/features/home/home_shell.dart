@@ -483,88 +483,120 @@ class _ProgramTabState extends ConsumerState<_ProgramTab> {
                   ),
                   const SizedBox(height: 14),
 
-                  // Custom program
+                  // Custom program — disabled for now
                   FadeSlideIn(
                     delay: const Duration(milliseconds: 80),
-                    child: GestureDetector(
-                      onTap: () => context.push('/custom'),
-                      child: Container(
-                        padding: const EdgeInsets.all(20),
-                        decoration: BoxDecoration(
-                          color: AppColors.isDark
-                              ? const Color(0xFF141F1A)
-                              : AppColors.surface,
-                          borderRadius: BorderRadius.circular(22),
-                          border: Border.all(
-                            color: AppColors.mint.withValues(
-                                alpha: AppColors.isDark ? 0.28 : 0.45),
-                            width: 1,
+                    child: Opacity(
+                      opacity: 0.55,
+                      child: Stack(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(20),
+                            decoration: BoxDecoration(
+                              color: AppColors.isDark
+                                  ? const Color(0xFF141F1A)
+                                  : AppColors.surface,
+                              borderRadius: BorderRadius.circular(22),
+                              border: Border.all(
+                                color: AppColors.mint.withValues(
+                                    alpha: AppColors.isDark ? 0.28 : 0.45),
+                                width: 1,
+                              ),
+                              boxShadow: AppColors.isDark
+                                  ? [
+                                      BoxShadow(
+                                        color: AppColors.mint
+                                            .withValues(alpha: 0.22),
+                                        blurRadius: 22,
+                                        offset: const Offset(0, 7),
+                                      ),
+                                      BoxShadow(
+                                        color: Colors.black
+                                            .withValues(alpha: 0.40),
+                                        blurRadius: 6,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ]
+                                  : AppColors.softShadow,
+                            ),
+                            child: Row(
+                              children: [
+                                AmbientBob(
+                                  period: const Duration(milliseconds: 2600),
+                                  child: Container(
+                                    width: 44,
+                                    height: 44,
+                                    decoration: BoxDecoration(
+                                      color: AppColors.mint
+                                          .withValues(alpha: 0.22),
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                    child: Icon(
+                                      Icons.auto_awesome_rounded,
+                                      color: AppColors.mint,
+                                      size: 24,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Mon propre programme',
+                                        style: TextStyle(
+                                          fontSize: 17,
+                                          fontWeight: FontWeight.w700,
+                                          color: AppColors.ink,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        'Décris un thème, l\'IA construit tout',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          color: AppColors.inkSoft,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Icon(
+                                  Icons.lock_outline_rounded,
+                                  size: 18,
+                                  color: AppColors.inkSoft,
+                                ),
+                              ],
+                            ),
                           ),
-                          boxShadow: AppColors.isDark
-                              ? [
-                                  BoxShadow(
-                                    color:
-                                        AppColors.mint.withValues(alpha: 0.22),
-                                    blurRadius: 22,
-                                    offset: const Offset(0, 7),
-                                  ),
-                                  BoxShadow(
-                                    color: Colors.black.withValues(alpha: 0.40),
-                                    blurRadius: 6,
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ]
-                              : AppColors.softShadow,
-                        ),
-                        child: Row(
-                          children: [
-                            AmbientBob(
-                              period: const Duration(milliseconds: 2600),
-                              child: Container(
-                                width: 44,
-                                height: 44,
-                                decoration: BoxDecoration(
-                                  color: AppColors.mint.withValues(alpha: 0.22),
-                                  borderRadius: BorderRadius.circular(14),
+                          Positioned(
+                            top: 10,
+                            right: 12,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: AppColors.inkSoft.withValues(alpha: 0.18),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color:
+                                      AppColors.inkSoft.withValues(alpha: 0.3),
+                                  width: 0.8,
                                 ),
-                                child: Icon(
-                                  Icons.auto_awesome_rounded,
-                                  color: AppColors.mint,
-                                  size: 24,
+                              ),
+                              child: Text(
+                                'Bientôt',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.inkSoft,
                                 ),
                               ),
                             ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Mon propre programme',
-                                    style: TextStyle(
-                                      fontSize: 17,
-                                      fontWeight: FontWeight.w700,
-                                      color: AppColors.ink,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    'Décris un thème, l\'IA construit tout',
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      color: AppColors.inkSoft,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Icon(
-                              Icons.arrow_forward_ios_rounded,
-                              size: 16,
-                              color: AppColors.inkSoft,
-                            ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
