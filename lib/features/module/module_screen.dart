@@ -56,32 +56,6 @@ class _ModuleScreenState extends ConsumerState<ModuleScreen> {
   int _totalSeconds = 0;
   int _remaining = 0;
 
-  // 7-second minimum read-time lock per page.
-  bool _canSwipe = false;
-  int _countdown = 7;
-  Timer? _swipeTimer;
-  Timer? _cntTimer;
-  // Indices of pages that are never locked (quiz, quote, etc.)
-  final Set<int> _freePages = {};
-
-  void _kickTimer(int page) {
-    _swipeTimer?.cancel();
-    _cntTimer?.cancel();
-    if (_freePages.contains(page)) {
-      if (mounted) setState(() { _canSwipe = true; _countdown = 0; });
-      return;
-    }
-    if (mounted) setState(() { _canSwipe = false; _countdown = 7; });
-    _swipeTimer = Timer(const Duration(seconds: 7), () {
-      if (mounted) setState(() => _canSwipe = true);
-    });
-    _cntTimer = Timer.periodic(const Duration(seconds: 1), (t) {
-      if (!mounted) { t.cancel(); return; }
-      setState(() { if (_countdown > 0) _countdown--; });
-      if (_countdown <= 0) t.cancel();
-    });
-  }
-
   @override
   void initState() {
     super.initState();
@@ -103,8 +77,6 @@ class _ModuleScreenState extends ConsumerState<ModuleScreen> {
   @override
   void dispose() {
     _timer?.cancel();
-    _swipeTimer?.cancel();
-    _cntTimer?.cancel();
     _controller.dispose();
     super.dispose();
   }
@@ -230,17 +202,6 @@ class _ModuleScreenState extends ConsumerState<ModuleScreen> {
       )),
     ];
 
-    // Mark quiz and quote pages as free (no 7-second lock).
-    _freePages
-      ..clear()
-      ..add(pages.length - 1); // quote (always last)
-    if (hasQuiz) _freePages.add(pages.length - 2); // quiz
-
-    // Start the first-page timer once.
-    if (!_canSwipe && _countdown == 7 && _page == 0 && _swipeTimer == null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _kickTimer(0));
-    }
-
     // Note locations parallel to pages (null = page has no note support).
     final noteLocations = <NoteLocation?>[
       loc('intro'),
@@ -268,13 +229,8 @@ class _ModuleScreenState extends ConsumerState<ModuleScreen> {
           PageView.builder(
             controller: _controller,
             scrollDirection: Axis.vertical,
-            physics: _canSwipe
-                ? const PageScrollPhysics()
-                : const NeverScrollableScrollPhysics(),
-            onPageChanged: (p) {
-              setState(() => _page = p);
-              _kickTimer(p);
-            },
+            physics: const PageScrollPhysics(),
+            onPageChanged: (p) => setState(() => _page = p),
             itemCount: pages.length,
             itemBuilder: (_, i) => pages[i],
           ),
@@ -284,9 +240,7 @@ class _ModuleScreenState extends ConsumerState<ModuleScreen> {
             child: GestureDetector(
               behavior: HitTestBehavior.translucent,
               onVerticalDragEnd: (details) {
-                if ((details.primaryVelocity ?? 0) < -400 && _canSwipe) {
-                  _next();
-                }
+                if ((details.primaryVelocity ?? 0) < -400) _next();
               },
               child: const SizedBox.expand(),
             ),
@@ -376,10 +330,6 @@ class _ModuleScreenState extends ConsumerState<ModuleScreen> {
                     fontSize: 12,
                   ),
                 ),
-                if (!_canSwipe && !_freePages.contains(_page)) ...[
-                  const SizedBox(width: 8),
-                  _LockPill(countdown: _countdown),
-                ],
                 const SizedBox(width: 6),
                 GestureDetector(
                   onTap: () => _showTimerSheet(context, ref),
@@ -1165,38 +1115,6 @@ class _ExercisesCard extends StatelessWidget {
   }
 }
 
-/// Small lock indicator shown when the 7-second read timer is active.
-class _LockPill extends StatelessWidget {
-  final int countdown;
-  const _LockPill({required this.countdown});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.35),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.lock_outline_rounded, size: 11, color: Colors.white),
-          const SizedBox(width: 4),
-          Text(
-            '${countdown}s',
-            style: const TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              color: Colors.white,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 class _QuizCard extends StatelessWidget {
   final Module module;
