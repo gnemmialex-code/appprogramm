@@ -52,7 +52,7 @@ class _LuminaAppState extends ConsumerState<LuminaApp>
     AppColors.brightness = isDark ? Brightness.dark : Brightness.light;
 
     return MaterialApp.router(
-      title: 'apprentik',
+      title: 'AppTok',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.themed,
       scrollBehavior: const AppScrollBehavior(),
