@@ -64,14 +64,24 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen>
     );
     if (src == null) return;
 
-    final file = await _picker.pickImage(
-        source: src, imageQuality: 85, maxWidth: 512, maxHeight: 512);
-    if (file == null) return;
+    try {
+      final file = await _picker.pickImage(
+          source: src, imageQuality: 85, maxWidth: 512, maxHeight: 512);
+      if (file == null) return;
 
-    final dir = await getApplicationDocumentsDirectory();
-    final dest = '${dir.path}/profile_photo.jpg';
-    await File(file.path).copy(dest);
-    setState(() => _photoPath = dest);
+      final dir = await getApplicationDocumentsDirectory();
+      final dest = '${dir.path}/profile_photo.jpg';
+      await File(file.path).copy(dest);
+      if (!mounted) return;
+      setState(() => _photoPath = dest);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Impossible d'ajouter la photo. Réessayez."),
+        ),
+      );
+    }
   }
 
   Future<void> _continue() async {

@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/router/app_router.dart';
 import 'state/app_providers.dart';
-import 'ui/device/phone_frame.dart';
+import 'ui/device/tablet_frame.dart';
 import 'ui/theme/app_colors.dart';
 import 'ui/theme/app_scroll_behavior.dart';
 import 'ui/theme/app_theme.dart';
@@ -58,7 +58,7 @@ class _LuminaAppState extends ConsumerState<LuminaApp>
       scrollBehavior: const AppScrollBehavior(),
       routerConfig: ref.watch(goRouterProvider),
       builder: (context, child) =>
-          PhoneFrame(child: child ?? const SizedBox.shrink()),
+          TabletFrame(child: child ?? const SizedBox.shrink()),
     );
   }
 }

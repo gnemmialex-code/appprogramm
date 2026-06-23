@@ -4,6 +4,14 @@
 <dict>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Cette app utilise l'appareil photo pour vous permettre de prendre une photo de profil.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Cette app accède à votre photothèque pour choisir une photo de profil.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Cette app enregistre votre photo de profil dans votre photothèque.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Cette app peut utiliser le microphone lors de la capture vidéo.</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
