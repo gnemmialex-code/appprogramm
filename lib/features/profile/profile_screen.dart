@@ -82,6 +82,12 @@ class ProfileScreen extends ConsumerWidget {
                   ref.read(userProfileProvider.notifier).update(email: v);
                 }),
               ),
+              const _Divider(),
+              _DangerTile(
+                icon: Icons.delete_forever_rounded,
+                title: 'Supprimer mon compte',
+                onTap: () => _confirmDeleteAccount(context, ref),
+              ),
             ],
           ),
           const SizedBox(height: 20),
@@ -184,32 +190,6 @@ class ProfileScreen extends ConsumerWidget {
             availability: ref.watch(dailyAvailabilityProvider),
             onSetDay: (i, m) =>
                 ref.read(dailyAvailabilityProvider.notifier).setDay(i, m),
-          ),
-          const SizedBox(height: 20),
-          _SectionHeader('Abonnement'),
-          const SizedBox(height: 8),
-          _SectionCard(
-            children: [
-              _InfoTile(
-                icon: Icons.star_rounded,
-                iconColor: AppColors.sun,
-                title: 'Plan actuel',
-                trailing: _PlanBadge(label: 'Gratuit'),
-              ),
-              const _Divider(),
-              _InfoTile(
-                icon: Icons.rocket_launch_rounded,
-                iconColor: AppColors.lavender,
-                title: 'Passer à Premium',
-                trailing: Icon(
-                  Icons.arrow_forward_ios_rounded,
-                  size: 14,
-                  color: AppColors.inkSoft,
-                ),
-                onTap: () =>
-                    _showSnack(context, 'Premium bientôt disponible 🚀'),
-              ),
-            ],
           ),
           const SizedBox(height: 20),
           _SectionHeader('Légal & Confidentialité'),
@@ -554,6 +534,78 @@ class ProfileScreen extends ConsumerWidget {
       ),
     );
   }
+
+  /// Permanently delete the account: wipe every locally-stored value, reset all
+  /// in-memory state back to its defaults, and send the user back to the very
+  /// first screen so they start over from scratch.
+  Future<void> _confirmDeleteAccount(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        title: const Text(
+          'Supprimer mon compte ?',
+          style: TextStyle(fontWeight: FontWeight.w800),
+        ),
+        content: const Text(
+          'Toutes vos données (profil, programme, progression, notes) seront '
+          'définitivement effacées et l\'application repartira de zéro. '
+          'Cette action est irréversible.',
+          style: TextStyle(height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(false),
+            child: Text(
+              'Annuler',
+              style: TextStyle(color: AppColors.inkSoft),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(true),
+            child: Text(
+              'Supprimer',
+              style: TextStyle(
+                color: AppColors.danger,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    // Erase everything persisted on the device.
+    await ref.read(appStorageProvider).wipe();
+
+    // Reset every piece of in-memory state so nothing from the old account
+    // lingers; each notifier rebuilds from the now-empty storage.
+    ref.invalidate(programControllerProvider);
+    ref.invalidate(expertProgramControllerProvider);
+    ref.invalidate(progressControllerProvider);
+    ref.invalidate(reminderControllerProvider);
+    ref.invalidate(retentionControllerProvider);
+    ref.invalidate(userProfileProvider);
+    ref.invalidate(onboardingCompleteProvider);
+    ref.invalidate(appSettingsProvider);
+    ref.invalidate(dailyAvailabilityProvider);
+    ref.invalidate(usageAnalyticsProvider);
+    ref.invalidate(notesProvider);
+    ref.invalidate(quizProgressProvider);
+    ref.invalidate(darkModeProvider);
+
+    if (!context.mounted) return;
+    // Back to square one: the intro flow.
+    context.go('/intro');
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -842,24 +894,44 @@ class _Divider extends StatelessWidget {
   }
 }
 
-class _PlanBadge extends StatelessWidget {
-  final String label;
-  const _PlanBadge({required this.label});
+/// Destructive action row (e.g. delete account): red icon + red label.
+class _DangerTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final VoidCallback? onTap;
+
+  const _DangerTile({required this.icon, required this.title, this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: AppColors.mint.withValues(alpha: 0.25),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-          color: AppColors.ink,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              Icon(icon, size: 20, color: AppColors.danger),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.danger,
+                  ),
+                ),
+              ),
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 18,
+                color: AppColors.danger.withValues(alpha: 0.6),
+              ),
+            ],
+          ),
         ),
       ),
     );
