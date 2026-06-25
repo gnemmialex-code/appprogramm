@@ -1,7 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../auth/auth_providers.dart';
+import '../../features/auth/login_screen.dart';
 import '../../features/custom_program/custom_program_screen.dart';
 import '../../features/domain_detail/domain_detail_screen.dart';
 import '../../features/expert/expert_generate_screen.dart';
@@ -34,38 +38,46 @@ import '../../ui/theme/app_colors.dart';
 /// onboarding-completion state and force first-launch users through the
 /// questionnaire before reaching any other screen.
 final goRouterProvider = Provider<GoRouter>((ref) {
-  final storage = ref.read(appStorageProvider);
-  final introSeen = storage.introSeen;
-  final onboardingDone = storage.onboardingComplete;
-
-  String initialLocation;
-  if (!introSeen) {
-    initialLocation = '/intro';
-  } else if (!onboardingDone) {
-    initialLocation = '/onboarding';
-  } else {
-    initialLocation = '/';
-  }
+  final client = ref.read(supabaseClientProvider);
 
   return GoRouter(
-    initialLocation: initialLocation,
+    initialLocation: '/',
+    // Re-run the redirect whenever the sign-in state changes (login / logout /
+    // account deletion) so the user is moved in or out of the app instantly.
+    refreshListenable: GoRouterRefreshStream(client.auth.onAuthStateChange),
     redirect: (context, state) {
+      final loggedIn = client.auth.currentSession != null;
+      final loc = state.matchedLocation;
+      const authLocation = '/login';
+      final inAuth = loc == authLocation;
+
+      // Gate the whole app: signed-out users can only see the login screen.
+      if (!loggedIn) return inAuth ? null : authLocation;
+
+      // From here on the user is authenticated.
       final intro = ref.read(appStorageProvider).introSeen;
       final done = ref.read(onboardingCompleteProvider);
-      final loc = state.matchedLocation;
-
       final inIntroFlow = loc == '/intro' || loc == '/profile-setup';
       final inOnboarding = loc == '/onboarding' || loc == '/personality';
 
-      // Not seen intro yet → force into intro
+      // Just signed in → route to the right starting point.
+      if (inAuth) {
+        if (!intro) return '/intro';
+        if (!done) return '/onboarding';
+        return '/';
+      }
+
+      // First-launch gating (unchanged): intro slides → onboarding → app.
       if (!intro && !inIntroFlow) return '/intro';
-      // Seen intro but onboarding not done → onboarding
       if (intro && !done && !inOnboarding && !inIntroFlow) return '/onboarding';
-      // All done → don't fall back into setup flows
       if (done && (inOnboarding || inIntroFlow)) return '/';
       return null;
     },
     routes: [
+      GoRoute(
+        path: '/login',
+        builder: (_, _) => const LoginScreen(),
+      ),
       GoRoute(
         path: '/intro',
         builder: (_, _) => const IntroSlidesScreen(),
@@ -297,6 +309,29 @@ class _ExpertQuizWrapperState extends ConsumerState<_ExpertQuizWrapper> {
         ),
       ),
     );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Auth refresh bridge
+// ---------------------------------------------------------------------------
+
+/// Adapts a [Stream] (here Supabase's onAuthStateChange) into a
+/// [Listenable] so GoRouter re-evaluates its redirect on every auth change.
+class GoRouterRefreshStream extends ChangeNotifier {
+  GoRouterRefreshStream(Stream<dynamic> stream) {
+    notifyListeners();
+    _subscription = stream.asBroadcastStream().listen(
+      (_) => notifyListeners(),
+    );
+  }
+
+  late final StreamSubscription<dynamic> _subscription;
+
+  @override
+  void dispose() {
+    _subscription.cancel();
+    super.dispose();
   }
 }
 

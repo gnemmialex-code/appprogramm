@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/ai/generator.dart'
     show ProgramTier, tierFromMinutes, tierLabel, tierMinutesPerChapter;
 import '../../core/analytics/usage_analytics.dart';
+import '../../core/auth/auth_providers.dart';
 import '../../state/app_providers.dart';
 import '../../ui/theme/app_colors.dart';
 
@@ -15,6 +16,9 @@ class ProfileScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final profile = ref.watch(userProfileProvider);
     final settings = ref.watch(appSettingsProvider);
+    // The signed-in account's e-mail is the source of truth; fall back to the
+    // locally-stored value only if it isn't available yet.
+    final accountEmail = ref.watch(currentUserProvider)?.email ?? profile.email;
     final displayName = profile.firstName.isNotEmpty
         ? profile.firstName
         : (profile.pseudo.isNotEmpty ? profile.pseudo : 'Mon profil');
@@ -45,7 +49,7 @@ class ProfileScreen extends ConsumerWidget {
           _AvatarSection(
             initial: initial,
             displayName: displayName,
-            email: profile.email,
+            email: accountEmail,
           ),
           const SizedBox(height: 32),
           _SectionHeader('Mon compte'),
@@ -74,13 +78,24 @@ class ProfileScreen extends ConsumerWidget {
                 ),
               ),
               const _Divider(),
-              _EditTile(
+              _InfoTile(
                 icon: Icons.email_rounded,
                 title: 'Email',
-                value: profile.email.isNotEmpty ? profile.email : '—',
-                onTap: () => _editField(context, 'Email', profile.email, (v) {
-                  ref.read(userProfileProvider.notifier).update(email: v);
-                }),
+                trailing: Text(
+                  accountEmail.isNotEmpty ? accountEmail : '—',
+                  style: TextStyle(fontSize: 14, color: AppColors.inkSoft),
+                ),
+              ),
+              const _Divider(),
+              _InfoTile(
+                icon: Icons.logout_rounded,
+                title: 'Se déconnecter',
+                trailing: Icon(
+                  Icons.chevron_right_rounded,
+                  size: 18,
+                  color: AppColors.inkSoft,
+                ),
+                onTap: () => _confirmLogout(context, ref),
               ),
               const _Divider(),
               _DangerTile(
@@ -583,7 +598,18 @@ class ProfileScreen extends ConsumerWidget {
 
     if (confirmed != true) return;
 
-    // Erase everything persisted on the device.
+    // Delete the cloud account first (via the server-side `delete_user`
+    // function), then wipe local data. On failure we surface the message and
+    // keep the account intact.
+    try {
+      await ref.read(authControllerProvider).deleteAccount();
+    } catch (e) {
+      if (!context.mounted) return;
+      _showSnack(context, authErrorMessage(e));
+      return;
+    }
+
+    // Account gone → erase everything persisted on the device too.
     await ref.read(appStorageProvider).wipe();
 
     // Reset every piece of in-memory state so nothing from the old account
@@ -602,9 +628,49 @@ class ProfileScreen extends ConsumerWidget {
     ref.invalidate(quizProgressProvider);
     ref.invalidate(darkModeProvider);
 
-    if (!context.mounted) return;
-    // Back to square one: the intro flow.
-    context.go('/intro');
+    // Signing out is implicit after delete; the router's auth gate now sends the
+    // user back to the login screen automatically.
+  }
+
+  /// Confirms then signs the user out. The router redirects to /login on the
+  /// resulting auth-state change — local learning data stays on the device.
+  Future<void> _confirmLogout(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        title: const Text(
+          'Se déconnecter ?',
+          style: TextStyle(fontWeight: FontWeight.w800),
+        ),
+        content: const Text(
+          'Tu devras te reconnecter avec ton e-mail et ton mot de passe.',
+          style: TextStyle(height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(false),
+            child: Text('Annuler', style: TextStyle(color: AppColors.inkSoft)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(true),
+            child: const Text(
+              'Se déconnecter',
+              style: TextStyle(
+                color: AppColors.brandStart,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+    await ref.read(authControllerProvider).signOut();
   }
 }
 
