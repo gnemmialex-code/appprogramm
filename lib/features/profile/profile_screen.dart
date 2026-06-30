@@ -628,8 +628,12 @@ class ProfileScreen extends ConsumerWidget {
     ref.invalidate(quizProgressProvider);
     ref.invalidate(darkModeProvider);
 
-    // Signing out is implicit after delete; the router's auth gate now sends the
-    // user back to the login screen automatically.
+    // Storage is now empty (introSeen / onboardingComplete are reset), so
+    // sending the user to the root makes the router replay the first-launch
+    // flow from the intro slides — exactly as if the app had just been
+    // installed.
+    if (!context.mounted) return;
+    context.go('/');
   }
 
   /// Confirms then signs the user out. The router redirects to /login on the

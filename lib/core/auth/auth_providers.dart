@@ -52,7 +52,13 @@ class AuthController {
   /// Permanently deletes the signed-in account. Supabase doesn't allow a client
   /// to delete its own auth user directly, so this calls the `delete_user`
   /// Postgres function (SECURITY DEFINER) and then signs out locally.
+  ///
+  /// Signing in is optional in this app (data lives on-device), so when there's
+  /// no active session there's nothing to remove server-side — the caller is
+  /// still responsible for wiping all local data. This keeps the "Delete my
+  /// account" action functional whether or not a cloud account exists.
   Future<void> deleteAccount() async {
+    if (_client.auth.currentSession == null) return;
     await _client.rpc('delete_user');
     await _client.auth.signOut();
   }

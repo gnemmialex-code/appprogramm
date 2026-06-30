@@ -46,28 +46,18 @@ final goRouterProvider = Provider<GoRouter>((ref) {
     // account deletion) so the user is moved in or out of the app instantly.
     refreshListenable: GoRouterRefreshStream(client.auth.onAuthStateChange),
     redirect: (context, state) {
-      final loggedIn = client.auth.currentSession != null;
       final loc = state.matchedLocation;
-      const authLocation = '/login';
-      final inAuth = loc == authLocation;
 
-      // Gate the whole app: signed-out users can only see the login screen.
-      if (!loggedIn) return inAuth ? null : authLocation;
-
-      // From here on the user is authenticated.
+      // No login/sign-up wall: a freshly installed app drops the user straight
+      // into the intro slides, then onboarding, then the app. Authentication
+      // remains available (e.g. from the profile) but is no longer required to
+      // use the app on first launch.
       final intro = ref.read(appStorageProvider).introSeen;
       final done = ref.read(onboardingCompleteProvider);
       final inIntroFlow = loc == '/intro' || loc == '/profile-setup';
       final inOnboarding = loc == '/onboarding' || loc == '/personality';
 
-      // Just signed in → route to the right starting point.
-      if (inAuth) {
-        if (!intro) return '/intro';
-        if (!done) return '/onboarding';
-        return '/';
-      }
-
-      // First-launch gating (unchanged): intro slides → onboarding → app.
+      // First-launch gating: intro slides → onboarding → app.
       if (!intro && !inIntroFlow) return '/intro';
       if (intro && !done && !inOnboarding && !inIntroFlow) return '/onboarding';
       if (done && (inOnboarding || inIntroFlow)) return '/';
